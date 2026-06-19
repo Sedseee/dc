@@ -88,7 +88,7 @@ class JJSView(discord.ui.View):
         self.add_item(JJSDropdown())
 
 
-# --- UPDATED: HONEYPOT PANEL VIEW (FORMAL, NO EMOJIS, NO CAPS) ---
+# --- UPDATED: HONEYPOT PANEL VIEW ---
 class HoneypotView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -101,7 +101,7 @@ class HoneypotView(discord.ui.View):
         if interaction.channel.id not in bot.honeypot_channels:
             bot.honeypot_channels.append(interaction.channel.id)
             save_honeypots(bot.honeypot_channels)
-            await interaction.response.send_message("the honeypot mechanism has been successfully activated for this channel. unauthorized media submissions will result in an immediate softban.", ephemeral=True)
+            await interaction.response.send_message("the honeypot mechanism has been successfully activated for this channel. any unauthorized transmission will result in an immediate softban.", ephemeral=True)
         else:
             await interaction.response.send_message("the honeypot mechanism is already active within this channel.", ephemeral=True)
 
@@ -150,7 +150,7 @@ bot = MyBot()
 # 3. COMMANDS & EVENTS
 # ==========================================
 
-# --- UPDATED: HONEYPOT SCAM TRAP EVENT (FORMAL, NO EMOJIS, NO CAPS) ---
+# --- UPDATED: HONEYPOT SCAM TRAP EVENT (NOW TRIGGERS ON ALL MESSAGES) ---
 @bot.event
 async def on_message(message):
     # Ignore messages from bots to prevent loops
@@ -159,34 +159,32 @@ async def on_message(message):
     
     # Check if the channel is an active honeypot
     if message.channel.id in bot.honeypot_channels:
-        # Check if the message contains an image/attachment
-        if message.attachments:
-            # Exempt the Server Owner and Administrators
-            if message.author != message.guild.owner and not message.author.guild_permissions.administrator:
-                try:
-                    # Softban: Ban the user (deleting last 7 days of their messages), then instantly unban them
-                    await message.guild.ban(message.author, reason="unauthorized media submission in a designated security channel", delete_message_seconds=604800)
-                    await message.guild.unban(message.author, reason="automatic security unban completed")
-                    
-                    # Send a quick log into the channel
-                    alert = await message.channel.send(f"security protocol triggered. account `{message.author}` has been temporarily restricted due to an unauthorized submission.")
-                    await alert.delete(delay=10) # Clean up the alert after 10 seconds
-                except discord.Forbidden:
-                    print("ERROR: I do not have permissions to ban members!")
+        # Exempt the Server Owner and Administrators
+        if message.author != message.guild.owner and not message.author.guild_permissions.administrator:
+            try:
+                # Softban: Ban the user (deleting last 7 days of their messages), then instantly unban them
+                await message.guild.ban(message.author, reason="unauthorized transmission in a designated security channel", delete_message_seconds=604800)
+                await message.guild.unban(message.author, reason="automatic security unban completed")
                 
-                return # Stop processing anything else for this scam message
+                # Send a quick log into the channel
+                alert = await message.channel.send(f"security protocol triggered. account `{message.author}` has been temporarily restricted due to an unauthorized submission.")
+                await alert.delete(delay=10) # Clean up the alert after 10 seconds
+            except discord.Forbidden:
+                print("ERROR: I do not have permissions to ban members!")
+            
+            return # Stop processing anything else for this channel
 
     # IMPORTANT: Since we overrode on_message, we must process other prefix commands
     await bot.process_commands(message)
 
 
-# --- UPDATED: HONEYPOT SETUP COMMANDS (FORMAL, NO EMOJIS, NO CAPS) ---
+# --- UPDATED: HONEYPOT SETUP COMMANDS ---
 @bot.tree.command(name="honeypot-setup", description="spawn the panel to configure a security honeypot")
 @app_commands.checks.has_permissions(administrator=True)
 async def honeypot_setup(interaction: discord.Interaction):
     embed = discord.Embed(
         title="honeypot configuration panel",
-        description="use the options below to manage the security status of this channel.\n\nwhen active, any unauthorized media submissions by non-administrative personnel will result in an automated softban and message purge.",
+        description="use the options below to manage this channel's security settings.\n\nwhen enabled, any unauthorized media posted by non-admins will be automatically deleted, and the user will be softbanned.",
         color=0xFF0000
     )
     await interaction.response.send_message(embed=embed, view=HoneypotView())
@@ -197,7 +195,8 @@ async def honeypot_setup(ctx):
     """spawn the panel to configure a security honeypot"""
     embed = discord.Embed(
         title="honeypot configuration panel",
-        description="use the options below to manage the security status of this channel.\n\nwhen active, any unauthorized media submissions by non-administrative personnel will result in an automated softban and message purge.",
+        description="use the options below to manage this channel's security settings.\n\nwhen enabled, any unauthorized media posted by non-admins will be automatically deleted, and the user will be softbanned.
+",
         color=0xFF0000
     )
     await ctx.send(embed=embed, view=HoneypotView())
