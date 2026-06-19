@@ -87,34 +87,35 @@ class JJSView(discord.ui.View):
         super().__init__(timeout=None)
         self.add_item(JJSDropdown())
 
-# --- NEW: HONEYPOT PANEL VIEW ---
+
+# --- UPDATED: HONEYPOT PANEL VIEW (FORMAL, NO EMOJIS, NO CAPS) ---
 class HoneypotView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Enable Honeypot", style=discord.ButtonStyle.green, custom_id="hp_enable_btn", emoji="🕸️")
+    @discord.ui.button(label="enable honeypot", style=discord.ButtonStyle.green, custom_id="hp_enable_btn")
     async def enable_honeypot(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("❌ Only administrators can manage honeypots.", ephemeral=True)
+            return await interaction.response.send_message("this function is restricted to administrative personnel only.", ephemeral=True)
         
         if interaction.channel.id not in bot.honeypot_channels:
             bot.honeypot_channels.append(interaction.channel.id)
             save_honeypots(bot.honeypot_channels)
-            await interaction.response.send_message("✅ **Honeypot Enabled!** Anyone (except admins) sending an image here will be softbanned.", ephemeral=True)
+            await interaction.response.send_message("the honeypot mechanism has been successfully activated for this channel. unauthorized media submissions will result in an immediate softban.", ephemeral=True)
         else:
-            await interaction.response.send_message("⚠️ This channel is already a honeypot.", ephemeral=True)
+            await interaction.response.send_message("the honeypot mechanism is already active within this channel.", ephemeral=True)
 
-    @discord.ui.button(label="Disable Honeypot", style=discord.ButtonStyle.red, custom_id="hp_disable_btn", emoji="🛑")
+    @discord.ui.button(label="disable honeypot", style=discord.ButtonStyle.red, custom_id="hp_disable_btn")
     async def disable_honeypot(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("❌ Only administrators can manage honeypots.", ephemeral=True)
+            return await interaction.response.send_message("this function is restricted to administrative personnel only.", ephemeral=True)
         
         if interaction.channel.id in bot.honeypot_channels:
             bot.honeypot_channels.remove(interaction.channel.id)
             save_honeypots(bot.honeypot_channels)
-            await interaction.response.send_message("🛑 **Honeypot Disabled!** Members can now safely send images here.", ephemeral=True)
+            await interaction.response.send_message("the honeypot mechanism has been deactivated for this channel.", ephemeral=True)
         else:
-            await interaction.response.send_message("⚠️ This channel is not a honeypot.", ephemeral=True)
+            await interaction.response.send_message("the honeypot mechanism is not currently active within this channel.", ephemeral=True)
 
 # ==========================================
 # 2. BOT CLASS
@@ -149,7 +150,7 @@ bot = MyBot()
 # 3. COMMANDS & EVENTS
 # ==========================================
 
-# --- NEW: HONEYPOT SCAM TRAP EVENT ---
+# --- UPDATED: HONEYPOT SCAM TRAP EVENT (FORMAL, NO EMOJIS, NO CAPS) ---
 @bot.event
 async def on_message(message):
     # Ignore messages from bots to prevent loops
@@ -164,11 +165,11 @@ async def on_message(message):
             if message.author != message.guild.owner and not message.author.guild_permissions.administrator:
                 try:
                     # Softban: Ban the user (deleting last 7 days of their messages), then instantly unban them
-                    await message.guild.ban(message.author, reason="Triggered MrBeast Scam Honeypot", delete_message_seconds=604800)
-                    await message.guild.unban(message.author, reason="Softban completed")
+                    await message.guild.ban(message.author, reason="unauthorized media submission in a designated security channel", delete_message_seconds=604800)
+                    await message.guild.unban(message.author, reason="automatic security unban completed")
                     
                     # Send a quick log into the channel
-                    alert = await message.channel.send(f"🚨 **SCAM PREVENTED!** Softbanned `{message.author}` for triggering the honeypot.")
+                    alert = await message.channel.send(f"security protocol triggered. account `{message.author}` has been temporarily restricted due to an unauthorized submission.")
                     await alert.delete(delay=10) # Clean up the alert after 10 seconds
                 except discord.Forbidden:
                     print("ERROR: I do not have permissions to ban members!")
@@ -179,13 +180,13 @@ async def on_message(message):
     await bot.process_commands(message)
 
 
-# --- NEW: HONEYPOT SETUP COMMAND ---
-@bot.tree.command(name="honeypot-setup", description="Spawn the panel to configure a MrBeast scam honeypot")
+# --- UPDATED: HONEYPOT SETUP COMMANDS (FORMAL, NO EMOJIS, NO CAPS) ---
+@bot.tree.command(name="honeypot-setup", description="spawn the panel to configure a security honeypot")
 @app_commands.checks.has_permissions(administrator=True)
 async def honeypot_setup(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="🕸️ Anti-Scam Honeypot Setup",
-        description="Use the buttons below to toggle honeypot mode for this channel.\n\n**How it works:** If a regular user sends an image/attachment in an enabled channel, they will instantly be softbanned (Kicked + Messages Deleted).",
+        title="honeypot configuration panel",
+        description="use the options below to manage the security status of this channel.\n\nwhen active, any unauthorized media submissions by non-administrative personnel will result in an automated softban and message purge.",
         color=0xFF0000
     )
     await interaction.response.send_message(embed=embed, view=HoneypotView())
@@ -193,10 +194,10 @@ async def honeypot_setup(interaction: discord.Interaction):
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def honeypot_setup(ctx):
-    """Spawn the panel to configure a MrBeast scam honeypot"""
+    """spawn the panel to configure a security honeypot"""
     embed = discord.Embed(
-        title="🕸️ Anti-Scam Honeypot Setup",
-        description="Use the buttons below to toggle honeypot mode for this channel.\n\n**How it works:** If a regular user sends an image/attachment in an enabled channel, they will instantly be softbanned (Kicked + Messages Deleted).",
+        title="honeypot configuration panel",
+        description="use the options below to manage the security status of this channel.\n\nwhen active, any unauthorized media submissions by non-administrative personnel will result in an automated softban and message purge.",
         color=0xFF0000
     )
     await ctx.send(embed=embed, view=HoneypotView())
