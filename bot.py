@@ -184,7 +184,7 @@ async def on_message(message):
 async def honeypot_setup(interaction: discord.Interaction):
     embed = discord.Embed(
         title="honeypot configuration panel",
-        description="use the options below to manage this channel's security settings.\n\nwhen enabled, any unauthorized media posted by non-admins will be automatically deleted, and the user will be softbanned.",
+        description="please use the options below to manage the security status of this channel.\n\nwhen active, any unauthorized message or submission by non-administrative personnel will result in an automated softban and message purge.",
         color=0xFF0000
     )
     await interaction.response.send_message(embed=embed, view=HoneypotView())
@@ -195,8 +195,7 @@ async def honeypot_setup(ctx):
     """spawn the panel to configure a security honeypot"""
     embed = discord.Embed(
         title="honeypot configuration panel",
-        description="use the options below to manage this channel's security settings.\n\nwhen enabled, any unauthorized media posted by non-admins will be automatically deleted, and the user will be softbanned.
-",
+        description="please use the options below to manage the security status of this channel.\n\nwhen active, any unauthorized message or submission by non-administrative personnel will result in an automated softban and message purge.",
         color=0xFF0000
     )
     await ctx.send(embed=embed, view=HoneypotView())
