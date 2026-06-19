@@ -1,6 +1,8 @@
 import discord
 import os
 import json
+import logging # <-- NEW: Added for debugging
+import sys     # <-- NEW: Added for debugging
 from discord.ext import commands
 from discord import app_commands
 
@@ -247,11 +249,36 @@ async def on_ready():
     print(f"Bot logged in as {bot.user}")
 
 # ==========================================
-# 4. RUN
+# 4. RUN & DEBUGGING
 # ==========================================
 
+# Set up logging so Discord.py prints detailed errors to Railway logs
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+
+print("=== DEBUG: Bot script has started executing ===")
+
 TOKEN = os.getenv("DISCORD_TOKEN")
+
 if TOKEN:
-    bot.run(TOKEN)
+    print(f"=== DEBUG: Token found in environment! (Length: {len(TOKEN)} characters) ===")
+    
+    try:
+        print("=== DEBUG: Attempting to connect to Discord... ===")
+        # log_handler=None prevents discord.py from overriding our custom logging above
+        bot.run(TOKEN, log_handler=None) 
+        
+    except discord.errors.LoginFailure:
+        print("❌ CRITICAL ERROR: The Discord Token is invalid! Check your Railway variables.")
+    except discord.errors.PrivilegedIntentsRequired:
+        print("❌ CRITICAL ERROR: Privileged Intents are missing!")
+        print("-> Go to Discord Developer Portal > Your Bot > Bot Tab")
+        print("-> Turn ON 'Server Members Intent' and 'Message Content Intent'")
+    except Exception as e:
+        print(f"❌ CRITICAL ERROR: An unexpected error occurred: {e}")
 else:
-    print("ERROR: No DISCORD_TOKEN found!")
+    print("❌ CRITICAL ERROR: No DISCORD_TOKEN found in Railway Variables!")
+    print("-> Please go to Railway > Variables and add DISCORD_TOKEN")
