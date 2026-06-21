@@ -210,6 +210,35 @@ async def menu(ctx):
 # ==========================================
 
 @bot.command()
+@commands.has_permissions(manage_webhooks=True)
+async def impersonate(ctx, member: discord.Member, channel: discord.TextChannel, *, message: str):
+    webhooks = await channel.webhooks()
+    webhook = discord.utils.get(webhooks, name="Sedse Impersonator")
+    
+    if not webhook:
+        webhook = await channel.create_webhook(name="Sedse Impersonator")
+        
+    try:
+        await webhook.send(
+            content=message,
+            username=member.display_name,
+            avatar_url=member.display_avatar.url if member.display_avatar else None,
+            wait=False
+        )
+        
+        # Deletes the original command message so nobody knows you sent it
+        try:
+            await ctx.message.delete()
+        except discord.Forbidden:
+            pass
+            
+        confirmation = await ctx.send(f"Successfully impersonated {member.display_name} in {channel.mention}.")
+        await confirmation.delete(delay=3) # Deletes the confirmation message after 3 seconds
+        
+    except Exception as e:
+        await ctx.send(f"Failed to impersonate: {e}")
+
+@bot.command()
 async def afk(ctx, *, message="AFK"):
     afk_data = load_json(AFK_FILE, dict)
     afk_data[str(ctx.author.id)] = {"message": message}
@@ -314,7 +343,6 @@ async def unpurge(ctx, action: str = None):
         
     restored = 0
     for msg in reversed(msgs):
-        # Stop check
         if not active_unpurges.get(ctx.channel.id, False):
             await ctx.send(f"Unpurge stopped early. Restored {restored} messages.")
             purged_messages_cache[ctx.channel.id] = []
@@ -322,7 +350,6 @@ async def unpurge(ctx, action: str = None):
 
         if msg.content or msg.embeds:
             try:
-                # wait=False significantly speeds this up by bypassing the HTTP response wait
                 await webhook.send(
                     content=msg.content or None, embeds=msg.embeds,
                     username=msg.author.display_name,
@@ -330,7 +357,7 @@ async def unpurge(ctx, action: str = None):
                     wait=False
                 )
                 restored += 1
-                await asyncio.sleep(0.1) # Brief pause to allow the bot to listen for the stop command
+                await asyncio.sleep(0.1) 
             except Exception: pass
                 
     active_unpurges[ctx.channel.id] = False
