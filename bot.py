@@ -28,7 +28,7 @@ purged_messages_cache = {}
 active_unpurges = {}
 active_badapples = {}
 
-def load_json(filename, default_type=list):
+def load_json(filename, default_type=dict): # Changed default to dict
     try:
         with open(filename, "r") as f:
             return json.load(f)
@@ -83,10 +83,12 @@ class HoneypotView(discord.ui.View):
     async def enable_honeypot(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("Administrative personnel only.", ephemeral=True)
-        if interaction.channel.id not in bot.honeypot_channels:
-            bot.honeypot_channels.append(interaction.channel.id)
-            save_honeypots(bot.honeypot_channels)
-            await interaction.response.send_message("Honeypot activated for this channel.", ephemeral=True)
+        channels = load_honeypots()
+        if interaction.channel.id not in channels:
+            channels.append(interaction.channel.id)
+            save_honeypots(channels)
+            bot.honeypot_channels = channels
+            await interaction.response.send_message("Honeypot activated.", ephemeral=True)
         else:
             await interaction.response.send_message("Honeypot is already active.", ephemeral=True)
 
@@ -94,9 +96,11 @@ class HoneypotView(discord.ui.View):
     async def disable_honeypot(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("Administrative personnel only.", ephemeral=True)
-        if interaction.channel.id in bot.honeypot_channels:
-            bot.honeypot_channels.remove(interaction.channel.id)
-            save_honeypots(bot.honeypot_channels)
+        channels = load_honeypots()
+        if interaction.channel.id in channels:
+            channels.remove(interaction.channel.id)
+            save_honeypots(channels)
+            bot.honeypot_channels = channels
             await interaction.response.send_message("Honeypot deactivated.", ephemeral=True)
 
 # ==========================================
@@ -174,34 +178,71 @@ async def on_message(message):
 @bot.command()
 async def badapple(ctx, action: str = "start"):
     global active_badapples
+    
     if action.lower() == "stop":
         active_badapples[ctx.channel.id] = False
-        return await ctx.send("Stopping playback.")
+        return await ctx.send("Stopping Bad Apple...")
 
-    if active_badapples.get(ctx.channel.id): return await ctx.send("Already playing.")
+    if active_badapples.get(ctx.channel.id):
+        return await ctx.send("Bad Apple is already playing.")
+
     active_badapples[ctx.channel.id] = True
 
-    if not os.path.exists(BADAPPLE_FILE):
-        status = await ctx.send("Downloading frames...")
+    # Check if data exists or is incomplete
+    if not os.path.exists(BADAPPLE_FILE) or os.path.getsize(BADAPPLE_FILE) < 500:
+        status = await ctx.send("Downloading frames (Approx 2MB)...")
         async with aiohttp.ClientSession() as session:
-            async with session.get("https://raw.githubusercontent.com/Coding-with-Adam/Dash-by-Plotly/master/Other/Data-Dash-app-gallery/badapple_frames.json") as r:
-                # FIX: Read as text first to avoid ContentType errors
+            url = "https://raw.githubusercontent.com/Coding-with-Adam/Dash-by-Plotly/master/Other/Data-Dash-app-gallery/badapple_frames.json"
+            async with session.get(url) as r:
                 text_data = await r.text()
-                data = json.loads(text_data)
-                save_json(BADAPPLE_FILE, data)
-        await status.delete()
+                try:
+                    data = json.loads(text_data)
+                    save_json(BADAPPLE_FILE, data)
+                    await status.edit(content="Download complete. Loading...")
+                    await asyncio.sleep(1)
+                    await status.delete()
+                except Exception as e:
+                    active_badapples[ctx.channel.id] = False
+                    return await status.edit(content=f"Error parsing JSON: {e}")
 
-    frames = load_json(BADAPPLE_FILE, list)
-    if isinstance(frames, dict): frames = [frames[k] for k in sorted(frames.keys(), key=lambda x: int(x))]
+    raw_frames = load_json(BADAPPLE_FILE, dict)
+    if not raw_frames:
+        active_badapples[ctx.channel.id] = False
+        return await ctx.send("Error: Database is empty.")
+
+    # Convert Dict frames to sorted List
+    if isinstance(raw_frames, dict):
+        frames = [raw_frames[k] for k in sorted(raw_frames.keys(), key=lambda x: int(x))]
+    else:
+        frames = raw_frames
+
+    msg = await ctx.send("Preparing video...")
     
-    msg = await ctx.send("Loading...")
-    for i in range(0, len(frames), 15):
-        if not active_badapples.get(ctx.channel.id): break
+    # Loop through frames (Skip 20 frames per cycle for speed)
+    for i in range(0, len(frames), 20):
+        if not active_badapples.get(ctx.channel.id):
+            break
+            
+        frame_text = frames[i]
+        content = f"```\n{frame_text}\n```"
+        
+        # Ensure we never exceed 2000 chars
+        if len(content) > 2000:
+            content = f"```\n{frame_text[:1980]}\n```"
+
         try:
-            await msg.edit(content=f"```\n{frames[i]}\n```")
-            await asyncio.sleep(1.5)
-        except: break
+            await msg.edit(content=content)
+        except discord.HTTPException:
+            # If Discord rate limits us, wait and try next cycle
+            await asyncio.sleep(2)
+            continue
+        except Exception:
+            break
+            
+        await asyncio.sleep(1.2) # Discord safe limit
+
     active_badapples[ctx.channel.id] = False
+    await ctx.send("Bad Apple playback finished.")
 
 @bot.command()
 @commands.has_permissions(manage_messages=True)
@@ -213,7 +254,7 @@ async def unwarn(ctx, member: discord.Member, index: int):
         save_json(WARNINGS_FILE, data)
         await ctx.send(f"Removed warning {index} from {member.mention}: {removed['reason']}")
     else:
-        await ctx.send("Invalid warning index.")
+        await ctx.send("Invalid warning number.")
 
 @bot.command()
 async def afk(ctx, *, message="AFK"):
@@ -269,8 +310,10 @@ async def unpurge(ctx, action: str = None):
     hook = discord.utils.get(await ctx.channel.webhooks(), name="Sedse Restore") or await ctx.channel.create_webhook(name="Sedse Restore")
     for m in reversed(msgs):
         if not active_unpurges.get(ctx.channel.id): break
-        await hook.send(content=m.content, username=m.author.display_name, avatar_url=m.author.display_avatar.url, wait=False)
-        await asyncio.sleep(0.1)
+        try:
+            await hook.send(content=m.content, username=m.author.display_name, avatar_url=m.author.display_avatar.url, wait=False)
+            await asyncio.sleep(0.1)
+        except: pass
     await ctx.send("Unpurge complete.")
 
 @bot.command()
@@ -286,9 +329,9 @@ async def warn(ctx, member: discord.Member, *, reason="None"):
 @bot.command()
 async def warnings(ctx, member: discord.Member):
     user_warns = load_json(WARNINGS_FILE, dict).get(str(member.id), [])
-    if not user_warns: return await ctx.send("No warnings.")
+    if not user_warns: return await ctx.send("No warnings found for this user.")
     e = discord.Embed(title=f"Warnings: {member.name}", color=0xFFD700)
-    for i, w in enumerate(user_warns, 1): e.add_field(name=f"{i}. {w['mod']}", value=w['reason'], inline=False)
+    for i, w in enumerate(user_warns, 1): e.add_field(name=f"Warning {i} (Mod: {w['mod']})", value=w['reason'], inline=False)
     await ctx.send(embed=e)
 
 @bot.command()
@@ -344,7 +387,7 @@ async def menu(ctx):
 @commands.has_permissions(administrator=True)
 async def sync(ctx):
     await bot.tree.sync()
-    await ctx.send("Synced.")
+    await ctx.send("Slash commands synced.")
 
 # ==========================================
 # 6. RUN
