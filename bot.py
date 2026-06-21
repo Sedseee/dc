@@ -6,6 +6,7 @@ import sys
 import random
 import re
 import asyncio
+import aiohttp
 from datetime import timedelta
 from discord.ext import commands
 from discord import app_commands
@@ -18,6 +19,7 @@ HONEYPOT_FILE = "honeypots.json"
 WARNINGS_FILE = "warnings.json"
 SETTINGS_FILE = "settings.json"
 AFK_FILE = "afk.json"
+BADAPPLE_FILE = "badapple.json"
 
 # Important Role IDs
 ROLE_SCRIPT_USER_ID = 1500435366812061844
@@ -26,6 +28,7 @@ ROLE_VERIFIED_ID = 1507442109735633097
 # In-memory caches (clears if bot restarts)
 purged_messages_cache = {}
 active_unpurges = {}
+active_badapples = {}
 
 def load_json(filename, default_type=list):
     try:
@@ -174,7 +177,7 @@ async def on_message(message):
                 pass
             return 
 
-    # AFK System: Remove AFK status if the user types a message
+    # AFK System
     afk_data = load_json(AFK_FILE, dict)
     author_id = str(message.author.id)
     if author_id in afk_data:
@@ -183,7 +186,6 @@ async def on_message(message):
         welcome_msg = await message.channel.send(f"Welcome back {message.author.mention}, I have removed your AFK status.")
         await welcome_msg.delete(delay=5)
 
-    # AFK System: Reply if an AFK user is mentioned
     if message.mentions:
         for mentioned_user in message.mentions:
             mentioned_id = str(mentioned_user.id)
@@ -210,8 +212,85 @@ async def menu(ctx):
     await ctx.send("Please select a script from below:", view=JJSView())
 
 # ==========================================
-# 5. NEW SEDSE MODERATION & AFK COMMANDS
+# 5. NEW SEDSE COMMANDS
 # ==========================================
+
+@bot.command()
+async def badapple(ctx, action: str = "start"):
+    global active_badapples
+    
+    if action.lower() == "stop":
+        if active_badapples.get(ctx.channel.id, False):
+            active_badapples[ctx.channel.id] = False
+            await ctx.send("Stopped the Bad Apple video.")
+        else:
+            await ctx.send("Bad Apple is not currently playing in this channel.")
+        return
+
+    if action.lower() == "start":
+        if active_badapples.get(ctx.channel.id, False):
+            return await ctx.send("Bad Apple is already playing! Type '!sedse badapple stop' to stop it.")
+            
+        active_badapples[ctx.channel.id] = True
+        
+        # Download the file if it doesn't exist yet
+        if not os.path.exists(BADAPPLE_FILE):
+            status_msg = await ctx.send("Downloading ASCII frames from the internet... this will only happen once.")
+            url = "https://raw.githubusercontent.com/Coding-with-Adam/Dash-by-Plotly/master/Other/Data-Dash-app-gallery/badapple_frames.json"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        save_json(BADAPPLE_FILE, data)
+                        await status_msg.delete()
+                    else:
+                        active_badapples[ctx.channel.id] = False
+                        return await status_msg.edit(content="Failed to download frames. Try again later.")
+
+        # Load the frames
+        frames = load_json(BADAPPLE_FILE, list)
+        
+        # Safely convert to list if the downloaded JSON happened to be a dictionary
+        if isinstance(frames, dict):
+            try:
+                frames = [frames[k] for k in sorted(frames.keys(), key=lambda x: int(x))]
+            except ValueError:
+                frames = list(frames.values())
+
+        if not frames:
+            active_badapples[ctx.channel.id] = False
+            return await ctx.send("No frames were found in the database.")
+
+        display_msg = await ctx.send("Loading Bad Apple...")
+        
+        # Due to Discord API limits, we skip frames and wait 1.5 seconds per edit
+        # We skip every 15 frames to make the "video" feel like it's progressing through the song
+        try:
+            for i in range(0, len(frames), 15):
+                if not active_badapples.get(ctx.channel.id, False):
+                    break
+                
+                frame_text = frames[i]
+                
+                # Wrap it in code blocks so it aligns correctly
+                content = f"```\n{frame_text}\n```"
+                
+                # Truncate if the frame somehow exceeds Discord's 2000 char limit
+                if len(content) > 2000:
+                    content = content[:1996] + "```"
+                    
+                await display_msg.edit(content=content)
+                await asyncio.sleep(1.5) 
+                
+        except discord.errors.HTTPException:
+            pass # Ignore random Discord rate-limit errors
+            
+        active_badapples[ctx.channel.id] = False
+        try:
+            await display_msg.edit(content="Bad Apple playback finished.")
+        except:
+            pass
+
 
 @bot.command()
 @commands.has_permissions(manage_roles=True)
@@ -230,7 +309,7 @@ async def verify(ctx, member: discord.Member):
         await member.add_roles(*roles_to_add, reason=f"Manual verification by {ctx.author}")
         await ctx.send(f"Successfully verified {member.mention}.")
     except discord.Forbidden:
-        await ctx.send("I don't have permission to add roles to this user. Make sure my bot role is placed higher than the roles I am trying to assign.")
+        await ctx.send("I don't have permission to add roles to this user.")
 
 @bot.command()
 @commands.has_permissions(manage_webhooks=True)
@@ -248,7 +327,6 @@ async def impersonate(ctx, member: discord.Member, channel: discord.TextChannel,
             avatar_url=member.display_avatar.url if member.display_avatar else None,
             wait=False
         )
-        
         try:
             await ctx.message.delete()
         except discord.Forbidden:
