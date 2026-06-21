@@ -19,6 +19,10 @@ WARNINGS_FILE = "warnings.json"
 SETTINGS_FILE = "settings.json"
 AFK_FILE = "afk.json"
 
+# Important Role IDs
+ROLE_SCRIPT_USER_ID = 1500435366812061844
+ROLE_VERIFIED_ID = 1507442109735633097
+
 # In-memory caches (clears if bot restarts)
 purged_messages_cache = {}
 active_unpurges = {}
@@ -210,6 +214,25 @@ async def menu(ctx):
 # ==========================================
 
 @bot.command()
+@commands.has_permissions(manage_roles=True)
+async def verify(ctx, member: discord.Member):
+    script_role = ctx.guild.get_role(ROLE_SCRIPT_USER_ID)
+    verified_role = ctx.guild.get_role(ROLE_VERIFIED_ID)
+    
+    roles_to_add = []
+    if script_role: roles_to_add.append(script_role)
+    if verified_role: roles_to_add.append(verified_role)
+    
+    if not roles_to_add:
+        return await ctx.send("Error: Could not find the required roles in this server.")
+        
+    try:
+        await member.add_roles(*roles_to_add, reason=f"Manual verification by {ctx.author}")
+        await ctx.send(f"Successfully verified {member.mention}.")
+    except discord.Forbidden:
+        await ctx.send("I don't have permission to add roles to this user. Make sure my bot role is placed higher than the roles I am trying to assign.")
+
+@bot.command()
 @commands.has_permissions(manage_webhooks=True)
 async def impersonate(ctx, member: discord.Member, channel: discord.TextChannel, *, message: str):
     webhooks = await channel.webhooks()
@@ -226,14 +249,13 @@ async def impersonate(ctx, member: discord.Member, channel: discord.TextChannel,
             wait=False
         )
         
-        # Deletes the original command message so nobody knows you sent it
         try:
             await ctx.message.delete()
         except discord.Forbidden:
             pass
             
         confirmation = await ctx.send(f"Successfully impersonated {member.display_name} in {channel.mention}.")
-        await confirmation.delete(delay=3) # Deletes the confirmation message after 3 seconds
+        await confirmation.delete(delay=3)
         
     except Exception as e:
         await ctx.send(f"Failed to impersonate: {e}")
@@ -428,8 +450,8 @@ async def coinflip(ctx):
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def annihilate(ctx, member: discord.Member):
-    allowed_roles = ["verified", "script user"]
-    roles_to_remove = [r for r in member.roles if r.name.lower() not in allowed_roles and r.name != "@everyone"]
+    allowed_role_ids = [ROLE_SCRIPT_USER_ID, ROLE_VERIFIED_ID]
+    roles_to_remove = [r for r in member.roles if r.id not in allowed_role_ids and r.name != "@everyone"]
     
     if not roles_to_remove:
         return await ctx.send(f"{member.mention} has no eligible roles to strip.")
