@@ -467,6 +467,71 @@ async def annihilate(ctx, member: discord.Member):
 async def on_ready():
     print(f"Bot logged in as {bot.user}")
 
+# State tracker for Bad Apple playback
+active_badapples = {}
+
+@bot.command()
+async def badapple(ctx, action: str = "start"):
+    global active_badapples
+    
+    if action.lower() in ["end", "stop"]:
+        if active_badapples.get(ctx.channel.id):
+            active_badapples[ctx.channel.id] = False
+            await ctx.send("🛑 Stopping Bad Apple playback...")
+        else:
+            await ctx.send("No Bad Apple playback is currently active in this channel.")
+        return
+        
+    if action.lower() == "start":
+        if active_badapples.get(ctx.channel.id):
+            return await ctx.send("⚠️ Bad Apple is already playing in this channel! Use `!sedse badapple end` to stop it.")
+
+        # Try to load the frames file
+        frames_file = "bad_apple.json"
+        frames = []
+        if not os.path.exists(frames_file):
+            # Fallback to a tiny dummy animation if the user doesn't have the frames file
+            frames = [
+                "⬛⬛⬛⬛⬛\n⬛⬜⬜⬜⬛\n⬛⬜⬛⬜⬛\n⬛⬜⬜⬜⬛\n⬛⬛⬛⬛⬛",
+                "⬜⬜⬜⬜⬜\n⬜⬛⬛⬛⬜\n⬜⬛⬜⬛⬜\n⬜⬛⬛⬛⬜\n⬜⬜⬜⬜⬜",
+                "⚠️ `bad_apple.json` not found! This is just a placeholder animation."
+            ]
+            await ctx.send("⚠️ `bad_apple.json` not found! Playing a placeholder animation. Please add the frames file.")
+        else:
+            try:
+                with open(frames_file, "r", encoding="utf-8") as f:
+                    frames = json.load(f)
+            except Exception as e:
+                return await ctx.send(f"❌ Error loading frames: {e}")
+
+        active_badapples[ctx.channel.id] = True
+        msg = await ctx.send("```\nLoading Bad Apple...\n```")
+
+        # Playback Loop
+        for i, frame in enumerate(frames):
+            # Check if someone ran the 'end' command
+            if not active_badapples.get(ctx.channel.id):
+                try:
+                    await msg.edit(content="```\nBad Apple playback stopped.\n```")
+                except discord.NotFound:
+                    pass
+                break
+
+            # Discord message content limit is 2000 chars. Wrapping in code blocks.
+            content = f"```\n{frame[:1980]}\n```" 
+            
+            try:
+                await msg.edit(content=content)
+                # 1.5 seconds is the absolute minimum to avoid strict Discord API rate limits
+                await asyncio.sleep(1.5) 
+            except discord.errors.HTTPException as e:
+                if e.status == 429: # 429 is "Too Many Requests"
+                    await asyncio.sleep(5) # Back off for 5 seconds if rate limited
+                else:
+                    break # Stop if message was deleted or another error occurred
+        
+        active_badapples[ctx.channel.id] = False
+
 # ==========================================
 # 6. RUN & DEBUGGING
 # ==========================================
