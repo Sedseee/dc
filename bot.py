@@ -7,6 +7,7 @@ import random
 import re
 import asyncio
 from datetime import timedelta
+from typing import Union
 from discord.ext import commands
 from discord import app_commands
 
@@ -18,6 +19,7 @@ HONEYPOT_FILE = "honeypots.json"
 WARNINGS_FILE = "warnings.json"
 SETTINGS_FILE = "settings.json"
 AFK_FILE = "afk.json"
+PERMS_FILE = "perms.json"
 
 # Important Role IDs
 ROLE_SCRIPT_USER_ID = 1500435366812061844
@@ -26,6 +28,7 @@ ROLE_VERIFIED_ID = 1507442109735633097
 # In-memory caches (clears if bot restarts)
 purged_messages_cache = {}
 active_unpurges = {}
+active_badapples = {}
 
 def load_json(filename, default_type=list):
     try:
@@ -152,9 +155,44 @@ def parse_duration(duration_str):
     kwargs = {k: int(v) for k, v in match.groupdict().items() if v}
     return timedelta(**kwargs) if kwargs else None
 
+def check_perms(cmd_name, **default_perms):
+    async def predicate(ctx):
+        if ctx.guild and (ctx.author == ctx.guild.owner or ctx.author.guild_permissions.administrator):
+            return True
+            
+        if default_perms:
+            has_default = all(getattr(ctx.author.guild_permissions, k, False) == v for k, v in default_perms.items())
+            if has_default:
+                return True
+
+        perms_data = load_json(PERMS_FILE, dict)
+        guild_perms = perms_data.get(str(ctx.guild.id), {})
+        
+        for check_cmd in [cmd_name, "all"]:
+            cmd_perms = guild_perms.get(check_cmd, {"roles": [], "users": []})
+            
+            if ctx.author.id in cmd_perms["users"]:
+                return True
+            if any(role.id in cmd_perms["roles"] for role in ctx.author.roles):
+                return True
+                
+        raise commands.MissingPermissions([f"Custom Role/User Perm or {list(default_perms.keys())}"])
+    return commands.check(predicate)
+
 # ==========================================
-# 4. EXISTING COMMANDS & EVENTS
+# 4. EVENTS
 # ==========================================
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions) or isinstance(error, commands.CheckFailure):
+        await ctx.send("You do not have permission to use this command.")
+    elif isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send(f"Missing required argument: {error.param}")
+    elif isinstance(error, commands.CommandNotFound):
+        pass
+    else:
+        print(f"Error executing command: {error}")
 
 @bot.event
 async def on_message(message):
@@ -174,7 +212,7 @@ async def on_message(message):
                 pass
             return 
 
-    # AFK System: Remove AFK status if the user types a message
+    # AFK System
     afk_data = load_json(AFK_FILE, dict)
     author_id = str(message.author.id)
     if author_id in afk_data:
@@ -183,7 +221,6 @@ async def on_message(message):
         welcome_msg = await message.channel.send(f"Welcome back {message.author.mention}, I have removed your AFK status.")
         await welcome_msg.delete(delay=5)
 
-    # AFK System: Reply if an AFK user is mentioned
     if message.mentions:
         for mentioned_user in message.mentions:
             mentioned_id = str(mentioned_user.id)
@@ -193,14 +230,61 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
+@bot.event
+async def on_ready():
+    print(f"Bot logged in as {bot.user}")
+
+# ==========================================
+# 5. COMMANDS
+# ==========================================
+
 @bot.command()
 @commands.has_permissions(administrator=True)
+async def perm(ctx, command_name: str, target: Union[discord.Role, discord.Member]):
+    command_name = command_name.lower()
+    
+    valid_commands = [c.name for c in bot.commands] + ["all"]
+    if command_name not in valid_commands:
+        return await ctx.send(f"Command '{command_name}' does not exist.")
+        
+    perms_data = load_json(PERMS_FILE, dict)
+    guild_id = str(ctx.guild.id)
+    
+    if guild_id not in perms_data:
+        perms_data[guild_id] = {}
+    if command_name not in perms_data[guild_id]:
+        perms_data[guild_id][command_name] = {"roles": [], "users": []}
+        
+    cmd_perms = perms_data[guild_id][command_name]
+    
+    if isinstance(target, discord.Role):
+        if target.id in cmd_perms["roles"]:
+            cmd_perms["roles"].remove(target.id)
+            action = "Revoked"
+        else:
+            cmd_perms["roles"].append(target.id)
+            action = "Granted"
+        target_name = f"role {target.mention}"
+    else:
+        if target.id in cmd_perms["users"]:
+            cmd_perms["users"].remove(target.id)
+            action = "Revoked"
+        else:
+            cmd_perms["users"].append(target.id)
+            action = "Granted"
+        target_name = f"user {target.mention}"
+        
+    save_json(PERMS_FILE, perms_data)
+    await ctx.send(f"{action} permission to use '{command_name}' for {target_name}.")
+
+@bot.command()
+@check_perms("honeypot_setup", administrator=True)
 async def honeypot_setup(ctx):
     embed = discord.Embed(title="honeypot configuration panel", description="Use the options below to manage security.", color=0xFF0000)
     await ctx.send(embed=embed, view=HoneypotView())
 
 @bot.command()
-@commands.has_permissions(administrator=True)
+@check_perms("verify_setup", administrator=True)
 async def verify_setup(ctx):
     embed = discord.Embed(title="Server Verification", description="Click below to verify.", color=0x5865F2)
     await ctx.send(embed=embed, view=VerifyView())
@@ -209,12 +293,8 @@ async def verify_setup(ctx):
 async def menu(ctx):
     await ctx.send("Please select a script from below:", view=JJSView())
 
-# ==========================================
-# 5. NEW SEDSE MODERATION & AFK COMMANDS
-# ==========================================
-
 @bot.command()
-@commands.has_permissions(manage_roles=True)
+@check_perms("verify", manage_roles=True)
 async def verify(ctx, member: discord.Member):
     script_role = ctx.guild.get_role(ROLE_SCRIPT_USER_ID)
     verified_role = ctx.guild.get_role(ROLE_VERIFIED_ID)
@@ -233,7 +313,7 @@ async def verify(ctx, member: discord.Member):
         await ctx.send("I don't have permission to add roles to this user. Make sure my bot role is placed higher than the roles I am trying to assign.")
 
 @bot.command()
-@commands.has_permissions(manage_webhooks=True)
+@check_perms("impersonate", manage_webhooks=True)
 async def impersonate(ctx, member: discord.Member, channel: discord.TextChannel, *, message: str):
     webhooks = await channel.webhooks()
     webhook = discord.utils.get(webhooks, name="Sedse Impersonator")
@@ -268,21 +348,21 @@ async def afk(ctx, *, message="AFK"):
     await ctx.send(f"{ctx.author.mention}, I have set your AFK status to: {message}")
 
 @bot.command()
-@commands.has_permissions(kick_members=True)
+@check_perms("kick", kick_members=True)
 async def kick(ctx, member: discord.Member, *, reason="No reason provided"):
     await member.kick(reason=reason)
     await ctx.send(f"{member.mention} has been kicked. Reason: {reason}")
     await send_log(ctx.guild, "User Kicked", f"**User:** {member.mention}\n**Mod:** {ctx.author.mention}\n**Reason:** {reason}", discord.Color.orange())
 
 @bot.command()
-@commands.has_permissions(ban_members=True)
+@check_perms("ban", ban_members=True)
 async def ban(ctx, member: discord.Member, *, reason="No reason provided"):
     await member.ban(reason=reason)
     await ctx.send(f"{member.mention} has been banned. Reason: {reason}")
     await send_log(ctx.guild, "User Banned", f"**User:** {member.mention}\n**Mod:** {ctx.author.mention}\n**Reason:** {reason}", discord.Color.red())
 
 @bot.command()
-@commands.has_permissions(ban_members=True)
+@check_perms("softban", ban_members=True)
 async def softban(ctx, member: discord.Member, *, reason="No reason provided"):
     await member.ban(reason=f"Softban: {reason}", delete_message_seconds=604800)
     await ctx.guild.unban(member, reason="Softban release")
@@ -290,14 +370,14 @@ async def softban(ctx, member: discord.Member, *, reason="No reason provided"):
     await send_log(ctx.guild, "User Softbanned", f"**User:** {member.mention}\n**Mod:** {ctx.author.mention}\n**Reason:** {reason}", discord.Color.orange())
 
 @bot.command()
-@commands.has_permissions(ban_members=True)
+@check_perms("unban", ban_members=True)
 async def unban(ctx, user: discord.User):
     await ctx.guild.unban(user, reason=f"Unbanned by {ctx.author}")
     await ctx.send(f"{user.mention} has been unbanned.")
     await send_log(ctx.guild, "User Unbanned", f"**User:** {user.mention}\n**Mod:** {ctx.author.mention}", discord.Color.green())
 
 @bot.command(aliases=["mute"])
-@commands.has_permissions(moderate_members=True)
+@check_perms("timeout", moderate_members=True)
 async def timeout(ctx, member: discord.Member, duration_str: str = None, *, reason="No reason provided"):
     duration = None
     actual_reason = reason
@@ -320,14 +400,14 @@ async def timeout(ctx, member: discord.Member, duration_str: str = None, *, reas
         await ctx.send("I don't have permission to timeout this user.")
 
 @bot.command(aliases=["unmute"])
-@commands.has_permissions(moderate_members=True)
+@check_perms("untimeout", moderate_members=True)
 async def untimeout(ctx, member: discord.Member):
     await member.timeout(None, reason=f"Untimeout by {ctx.author}")
     await ctx.send(f"{member.mention} has been untimed out/unmuted.")
     await send_log(ctx.guild, "User Untimed Out", f"**User:** {member.mention}\n**Mod:** {ctx.author.mention}", discord.Color.green())
 
 @bot.command()
-@commands.has_permissions(manage_messages=True)
+@check_perms("purge", manage_messages=True)
 async def purge(ctx, amount: int):
     if amount <= 0:
         return await ctx.send("Amount must be greater than 0.")
@@ -339,7 +419,7 @@ async def purge(ctx, amount: int):
     await ctx.send(f"Purged {len(msgs_to_save)} messages. Use '!sedse unpurge' to undo.", delete_after=5)
 
 @bot.command()
-@commands.has_permissions(manage_messages=True)
+@check_perms("unpurge", manage_messages=True)
 async def unpurge(ctx, action: str = None):
     global active_unpurges
 
@@ -387,7 +467,7 @@ async def unpurge(ctx, action: str = None):
     await ctx.send(f"Successfully restored {restored} messages.")
 
 @bot.command()
-@commands.has_permissions(manage_messages=True)
+@check_perms("warn", manage_messages=True)
 async def warn(ctx, member: discord.Member, *, reason="No reason provided"):
     warnings = load_json(WARNINGS_FILE, dict)
     user_id = str(member.id)
@@ -400,7 +480,7 @@ async def warn(ctx, member: discord.Member, *, reason="No reason provided"):
     await send_log(ctx.guild, "User Warned", f"**User:** {member.mention}\n**Mod:** {ctx.author.mention}\n**Reason:** {reason}", discord.Color.yellow())
 
 @bot.command()
-@commands.has_permissions(manage_messages=True)
+@check_perms("warnings", manage_messages=True)
 async def warnings(ctx, member: discord.Member):
     warnings_data = load_json(WARNINGS_FILE, dict)
     user_warns = warnings_data.get(str(member.id), [])
@@ -414,27 +494,27 @@ async def warnings(ctx, member: discord.Member):
     await ctx.send(embed=embed)
 
 @bot.command()
-@commands.has_permissions(manage_channels=True)
+@check_perms("lock", manage_channels=True)
 async def lock(ctx, channel: discord.TextChannel = None):
     channel = channel or ctx.channel
     await channel.set_permissions(ctx.guild.default_role, send_messages=False)
     await ctx.send(f"{channel.mention} has been locked.")
 
 @bot.command()
-@commands.has_permissions(manage_channels=True)
+@check_perms("unlock", manage_channels=True)
 async def unlock(ctx, channel: discord.TextChannel = None):
     channel = channel or ctx.channel
     await channel.set_permissions(ctx.guild.default_role, send_messages=True)
     await ctx.send(f"{channel.mention} has been unlocked.")
 
 @bot.command()
-@commands.has_permissions(manage_nicknames=True)
+@check_perms("nick", manage_nicknames=True)
 async def nick(ctx, member: discord.Member, *, name: str):
     await member.edit(nick=name)
     await ctx.send(f"Changed {member.mention}'s nickname to **{name}**.")
 
 @bot.command()
-@commands.has_permissions(administrator=True)
+@check_perms("log_channel", administrator=True)
 async def log_channel(ctx, channel: discord.TextChannel):
     settings = load_json(SETTINGS_FILE, dict)
     if str(ctx.guild.id) not in settings: settings[str(ctx.guild.id)] = {}
@@ -448,7 +528,7 @@ async def coinflip(ctx):
     await ctx.send(f"The coin landed on: **{outcome}**")
 
 @bot.command()
-@commands.has_permissions(administrator=True)
+@check_perms("annihilate", administrator=True)
 async def annihilate(ctx, member: discord.Member):
     allowed_role_ids = [ROLE_SCRIPT_USER_ID, ROLE_VERIFIED_ID]
     roles_to_remove = [r for r in member.roles if r.id not in allowed_role_ids and r.name != "@everyone"]
@@ -463,13 +543,6 @@ async def annihilate(ctx, member: discord.Member):
     except discord.Forbidden:
         await ctx.send("I don't have permission to remove some of this user's roles.")
 
-@bot.event
-async def on_ready():
-    print(f"Bot logged in as {bot.user}")
-
-# State tracker for Bad Apple playback
-active_badapples = {}
-
 @bot.command()
 async def badapple(ctx, action: str = "start"):
     global active_badapples
@@ -477,39 +550,35 @@ async def badapple(ctx, action: str = "start"):
     if action.lower() in ["end", "stop"]:
         if active_badapples.get(ctx.channel.id):
             active_badapples[ctx.channel.id] = False
-            await ctx.send("🛑 Stopping Bad Apple playback...")
+            await ctx.send("Stopping Bad Apple playback...")
         else:
             await ctx.send("No Bad Apple playback is currently active in this channel.")
         return
         
     if action.lower() == "start":
         if active_badapples.get(ctx.channel.id):
-            return await ctx.send("⚠️ Bad Apple is already playing in this channel! Use `!sedse badapple end` to stop it.")
+            return await ctx.send("Bad Apple is already playing in this channel! Use '!sedse badapple end' to stop it.")
 
-        # Try to load the frames file
         frames_file = "bad_apple.json"
         frames = []
         if not os.path.exists(frames_file):
-            # Fallback to a tiny dummy animation if the user doesn't have the frames file
             frames = [
-                "⬛⬛⬛⬛⬛\n⬛⬜⬜⬜⬛\n⬛⬜⬛⬜⬛\n⬛⬜⬜⬜⬛\n⬛⬛⬛⬛⬛",
-                "⬜⬜⬜⬜⬜\n⬜⬛⬛⬛⬜\n⬜⬛⬜⬛⬜\n⬜⬛⬛⬛⬜\n⬜⬜⬜⬜⬜",
-                "⚠️ `bad_apple.json` not found! This is just a placeholder animation."
+                "#####\n#...#\n#.#.#\n#...#\n#####",
+                ".....\n.###.\n.#.#.\n.###.\n.....",
+                "[bad_apple.json not found! This is a placeholder animation.]"
             ]
-            await ctx.send("⚠️ `bad_apple.json` not found! Playing a placeholder animation. Please add the frames file.")
+            await ctx.send("[bad_apple.json not found! Playing a placeholder animation. Please add the frames file.]")
         else:
             try:
                 with open(frames_file, "r", encoding="utf-8") as f:
                     frames = json.load(f)
             except Exception as e:
-                return await ctx.send(f"❌ Error loading frames: {e}")
+                return await ctx.send(f"Error loading frames: {e}")
 
         active_badapples[ctx.channel.id] = True
         msg = await ctx.send("```\nLoading Bad Apple...\n```")
 
-        # Playback Loop
         for i, frame in enumerate(frames):
-            # Check if someone ran the 'end' command
             if not active_badapples.get(ctx.channel.id):
                 try:
                     await msg.edit(content="```\nBad Apple playback stopped.\n```")
@@ -517,18 +586,16 @@ async def badapple(ctx, action: str = "start"):
                     pass
                 break
 
-            # Discord message content limit is 2000 chars. Wrapping in code blocks.
             content = f"```\n{frame[:1980]}\n```" 
             
             try:
                 await msg.edit(content=content)
-                # 1.5 seconds is the absolute minimum to avoid strict Discord API rate limits
                 await asyncio.sleep(1.5) 
             except discord.errors.HTTPException as e:
-                if e.status == 429: # 429 is "Too Many Requests"
-                    await asyncio.sleep(5) # Back off for 5 seconds if rate limited
+                if e.status == 429: 
+                    await asyncio.sleep(5) 
                 else:
-                    break # Stop if message was deleted or another error occurred
+                    break 
         
         active_badapples[ctx.channel.id] = False
 
