@@ -755,11 +755,11 @@ async def ship(ctx, user1: discord.Member, user2: discord.Member = None):
 async def iq(ctx, member: discord.Member = None):
     member = member or ctx.author
     
-    # Use their ID so their IQ score is permanently the same
+
     random.seed(member.id)
     iq_score = random.randint(10, 200)
     
-    # Reset the random seed for other commands
+
     random.seed()
     
     if iq_score < 50:
@@ -791,6 +791,29 @@ async def ratio(ctx, member: discord.Member = None):
         await ctx.send(f"{member.mention} {ratio_text}")
     else:
         await ctx.send(ratio_text)
+
+
+@bot.command()
+async def doxx(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    
+    # Generate fake network data
+    fake_ip = f"{random.randint(11,250)}.{random.randint(0,255)}.{random.randint(0,255)}.{random.randint(0,255)}"
+    fake_mac = ":".join(["%02x" % random.randint(0, 255) for _ in range(6)]).upper()
+    
+    # Generate fake GPS coordinates
+    lat = round(random.uniform(-90.0, 90.0), 4)
+    lon = round(random.uniform(-180.0, 180.0), 4)
+    
+    embed = discord.Embed(title="📡 TARGET ACQUIRED", color=0x00FF00)
+    embed.add_field(name="Target", value=member.mention, inline=False)
+    embed.add_field(name="IPv4 Address", value=f"`{fake_ip}`", inline=True)
+    embed.add_field(name="MAC Address", value=f"`{fake_mac}`", inline=True)
+    embed.add_field(name="Coordinates", value=f"`{lat}, {lon}`", inline=False)
+    embed.add_field(name="ISP", value="`Spectrum / AT&T`", inline=True)
+    embed.set_footer(text="Information is 100% accurate (real)")
+    
+    await ctx.send(embed=embed)
 
 # ==========================================
 # 6. RUN & DEBUGGING
