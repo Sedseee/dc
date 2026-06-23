@@ -815,6 +815,24 @@ async def doxx(ctx, member: discord.Member = None):
     
     await ctx.send(embed=embed)
 
+
+@bot.command()
+async def zalgo(ctx, *, text: str):
+    # Unicode combining characters that make text look glitched
+    combining_marks = [chr(i) for i in range(0x0300, 0x036F)]
+    
+    glitched_text = ""
+    for char in text:
+        glitched_text += char
+        # Add 3 to 8 random glitch marks to each letter
+        glitched_text += "".join(random.choices(combining_marks, k=random.randint(3, 8)))
+        
+    # Ensure it doesn't break Discord's character limit
+    if len(glitched_text) > 2000:
+        glitched_text = glitched_text[:1997] + "..."
+        
+    await ctx.send(glitched_text)
+
 # ==========================================
 # 6. RUN & DEBUGGING
 # ==========================================
