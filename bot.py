@@ -244,10 +244,19 @@ async def on_ready():
 async def forcemute(ctx, member: discord.Member, duration_str: str = "1h", *, reason="Owner override"):
     duration = parse_duration(duration_str) or timedelta(hours=1)
     
-    # 1. Find all roles the user has that are higher than @everyone
-    roles_to_remove = [role for role in member.roles if role.name != "@everyone" and not role.is_default()]
+    # Roles that should NEVER be stripped
+    exempt_roles = [ROLE_SCRIPT_USER_ID, ROLE_VERIFIED_ID]
     
-    # 2. Save their role IDs so we can give them back later
+    # Find all roles the user has that are higher than @everyone, not managed (booster/bot roles), and not exempt
+    roles_to_remove = [
+        role for role in member.roles 
+        if role.name != "@everyone" 
+        and not role.is_default() 
+        and not role.managed 
+        and role.id not in exempt_roles
+    ]
+    
+    # Save their role IDs so we can give them back later
     role_ids = [role.id for role in roles_to_remove]
     
     muted_data = load_json(MUTED_ADMINS_FILE, dict)
@@ -255,14 +264,14 @@ async def forcemute(ctx, member: discord.Member, duration_str: str = "1h", *, re
     save_json(MUTED_ADMINS_FILE, muted_data)
 
     try:
-        # 3. Strip their roles (Removes Admin immunity)
+        # Strip their roles (Removes Admin immunity)
         if roles_to_remove:
             await member.remove_roles(*roles_to_remove, reason=f"Force mute by {ctx.author}")
         
-        # 4. Now that they aren't admin, time them out
+        # Now that they aren't admin, time them out
         await member.timeout(discord.utils.utcnow() + duration, reason=reason)
         
-        await ctx.send(f"Successfully stripped roles and force-muted {member.mention} for {duration_str}.")
+        await ctx.send(f"Successfully stripped {len(roles_to_remove)} roles and force-muted {member.mention} for {duration_str}.")
         await send_log(ctx.guild, "Admin Force Muted", f"**User:** {member.mention}\n**Mod:** {ctx.author.mention}\n**Reason:** {reason}\n**Duration:** {duration_str}", discord.Color.red())
     except discord.Forbidden:
         await ctx.send("I still can't mute them! Make sure my Bot role is dragged higher than ALL of their roles in Server Settings.")
@@ -291,10 +300,10 @@ async def forceunmute(ctx, member: discord.Member):
             del muted_data[user_id]
             save_json(MUTED_ADMINS_FILE, muted_data)
             
-            await ctx.send(f"Restored roles and unmuted {member.mention}.")
+            await ctx.send(f"Restored {len(roles_to_add)} roles and unmuted {member.mention}.")
             await send_log(ctx.guild, "Admin Force Unmuted", f"**User:** {member.mention}\n**Mod:** {ctx.author.mention}", discord.Color.green())
-        except discord.Forbidden:
-            await ctx.send("I lack permission to restore their roles.")
+        except discord.Forbidden as e:
+            await ctx.send(f"I lack permission to restore their roles. Discord error details: {e}")
     else:
         await ctx.send("This user is not in the force-mute database.")
 
