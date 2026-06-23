@@ -669,6 +669,55 @@ async def badapple(ctx, action: str = "start"):
         
         active_badapples[ctx.channel.id] = False
 
+@bot.command()
+@check_perms("hamzbid", manage_webhooks=True)
+async def hamzbid(ctx):
+    target_id = 1425810901490991104
+    target_messages = []
+    
+    # Scan up to 200 recent messages in the channel to find the user's last 10
+    async for msg in ctx.channel.history(limit=200):
+        if msg.author.id == target_id and msg.content.strip():
+            target_messages.append(msg)
+            if len(target_messages) == 10:
+                break
+    
+    if not target_messages:
+        return await ctx.send("No recent messages found from that user to combine.")
+        
+    # Reverse the list so it combines them in chronological order (oldest to newest)
+    target_messages.reverse()
+    combined_text = " ".join([m.content for m in target_messages])
+    
+    # Ensure it doesn't exceed Discord's 2000 character limit
+    if len(combined_text) > 2000:
+        combined_text = combined_text[:1997] + "..."
+        
+    user = target_messages[0].author
+    
+    # Fetch or create the webhook
+    webhooks = await ctx.channel.webhooks()
+    webhook = discord.utils.get(webhooks, name="Sedse Impersonator")
+    if not webhook:
+        webhook = await ctx.channel.create_webhook(name="Sedse Impersonator")
+        
+    try:
+        await webhook.send(
+            content=combined_text,
+            username=user.display_name,
+            avatar_url=user.display_avatar.url if user.display_avatar else None,
+            wait=False
+        )
+        
+        # Delete the command invocation message
+        try:
+            await ctx.message.delete()
+        except discord.Forbidden:
+            pass
+            
+    except Exception as e:
+        await ctx.send(f"Failed to execute hamzbid: {e}")
+
 # ==========================================
 # 6. RUN & DEBUGGING
 # ==========================================
