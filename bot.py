@@ -718,6 +718,39 @@ async def hamzbid(ctx):
     except Exception as e:
         await ctx.send(f"Failed to execute hamzbid: {e}")
 
+
+@bot.command()
+async def ship(ctx, user1: discord.Member, user2: discord.Member = None):
+    # If they only tag one person, ship them with themselves
+    if user2 is None:
+        user2 = ctx.author
+
+    # Use the users' IDs as a random seed so the percentage stays the same for those two specific people
+    random.seed(user1.id + user2.id)
+    percentage = random.randint(0, 100)
+    
+    # Reset random seed back to normal time-based seed
+    random.seed()
+
+    # Determine message based on percentage
+    if percentage == 100:
+        status = "Get married already! 💍"
+    elif percentage > 75:
+        status = "A perfect match! ❤️"
+    elif percentage > 50:
+        status = "There's some potential here! 💕"
+    elif percentage > 25:
+        status = "Might want to just stay friends... 😬"
+    else:
+        status = "Absolutely not. Keep them away from each other. 🛑"
+
+    embed = discord.Embed(
+        title="Love Calculator 💘", 
+        description=f"**{user1.display_name}** & **{user2.display_name}**\n\nCompatibility: **{percentage}%**\n*{status}*",
+        color=discord.Color.pink()
+    )
+    await ctx.send(embed=embed)
+
 # ==========================================
 # 6. RUN & DEBUGGING
 # ==========================================
