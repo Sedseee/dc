@@ -751,6 +751,47 @@ async def ship(ctx, user1: discord.Member, user2: discord.Member = None):
     )
     await ctx.send(embed=embed)
 
+@bot.command()
+async def iq(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    
+    # Use their ID so their IQ score is permanently the same
+    random.seed(member.id)
+    iq_score = random.randint(10, 200)
+    
+    # Reset the random seed for other commands
+    random.seed()
+    
+    if iq_score < 50:
+        comment = "Actual room temperature IQ. 🥶"
+    elif iq_score < 90:
+        comment = "Not looking too bright... 🧱"
+    elif iq_score < 130:
+        comment = "Average, I guess. 😐"
+    else:
+        comment = "Okay Albert Einstein 🤓"
+
+    embed = discord.Embed(
+        title="🧠 IQ Test",
+        description=f"**{member.display_name}**'s IQ is **{iq_score}**.\n*{comment}*",
+        color=discord.Color.blue()
+    )
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def ratio(ctx, member: discord.Member = None):
+    # The pool of insults
+    pieces = ["L", "Ratio", "Skill issue", "Touch grass", "Cope", "Seethe", "Mald", "Didn't ask", "You fell off", "Get real", "No maidens", "Bozo"]
+    
+    # Pick 4 to 7 random insults
+    num_pieces = random.randint(4, 7)
+    ratio_text = " + ".join(random.sample(pieces, num_pieces))
+    
+    if member:
+        await ctx.send(f"{member.mention} {ratio_text}")
+    else:
+        await ctx.send(ratio_text)
+
 # ==========================================
 # 6. RUN & DEBUGGING
 # ==========================================
