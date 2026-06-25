@@ -1,3 +1,5 @@
+
+
 import discord
 import os
 import json
@@ -300,10 +302,24 @@ async def on_ready():
 # 5. COMMANDS
 # ==========================================
 
-@bot.command(aliases=["uwu"]) # Aliases allow "!sedse uwu lock @user" to trigger this function seamlessly
+@bot.command(aliases=["uwu"]) 
 @check_perms("uwulock", manage_messages=True)
 async def uwulock(ctx, arg1: str, arg2: str = None):
-    # This logic permits both '!sedse uwulock @user' and '!sedse uwu lock @user' 
+    # Handle '!sedse uwu unlock @user' gracefully through the alias
+    if arg1.lower() == "unlock" and arg2:
+        try:
+            member = await commands.MemberConverter().convert(ctx, arg2)
+        except commands.MemberNotFound:
+            return await ctx.send("User not found. Please mention a valid user.")
+        
+        uwu_data = load_json(UWULOCK_FILE, dict)
+        if str(member.id) in uwu_data:
+            del uwu_data[str(member.id)]
+            save_json(UWULOCK_FILE, uwu_data)
+            return await ctx.send(f"🔓 {member.mention} has been released from the UwU curse.")
+        return await ctx.send(f"{member.mention} is not currently UwU locked.")
+        
+    # This logic permits both '!sedse uwulock @user' and '!sedse uwu lock @user'
     member_str = arg2 if arg1.lower() == "lock" and arg2 else arg1
     
     try:
@@ -314,14 +330,25 @@ async def uwulock(ctx, arg1: str, arg2: str = None):
     uwu_data = load_json(UWULOCK_FILE, dict)
     user_id = str(member.id)
     
+    if user_id not in uwu_data:
+        uwu_data[user_id] = True
+        save_json(UWULOCK_FILE, uwu_data)
+        await ctx.send(f"🔒 {member.mention} is now UwU locked! :3")
+    else:
+        await ctx.send(f"{member.mention} is already UwU locked! :3")
+
+@bot.command()
+@check_perms("uwulock", manage_messages=True)
+async def uwuunlock(ctx, member: discord.Member):
+    uwu_data = load_json(UWULOCK_FILE, dict)
+    user_id = str(member.id)
+    
     if user_id in uwu_data:
         del uwu_data[user_id]
         save_json(UWULOCK_FILE, uwu_data)
         await ctx.send(f"🔓 {member.mention} has been released from the UwU curse.")
     else:
-        uwu_data[user_id] = True
-        save_json(UWULOCK_FILE, uwu_data)
-        await ctx.send(f"🔒 {member.mention} is now UwU locked! :3")
+        await ctx.send(f"{member.mention} is not currently UwU locked.")
 
 @bot.command()
 @commands.is_owner()
