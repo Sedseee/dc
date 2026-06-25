@@ -1,5 +1,3 @@
-
-
 import discord
 import os
 import json
@@ -268,8 +266,11 @@ async def on_message(message):
                 await message.channel.send(f"{mentioned_user.display_name} is currently AFK: {afk_msg}")
 
     # UwU Lock System Intercept
+    # We must allow uwulock commands to bypass this, otherwise admins can never unlock the server once locked!
+    is_uwu_command = message.content.lower().startswith(("!sedse uwu", "!uwu"))
+    
     uwu_data = load_json(UWULOCK_FILE, dict)
-    if str(message.author.id) in uwu_data:
+    if not is_uwu_command and (uwu_data.get("everyone") or str(message.author.id) in uwu_data):
         uwu_text = uwuify(message.content) if message.content.strip() else random.choice(UWU_EMOJIS)
         
         if len(uwu_text) > 2000:
@@ -305,29 +306,45 @@ async def on_ready():
 @bot.command(aliases=["uwu"]) 
 @check_perms("uwulock", manage_messages=True)
 async def uwulock(ctx, arg1: str, arg2: str = None):
-    # Handle '!sedse uwu unlock @user' gracefully through the alias
+    # Handle '!sedse uwu unlock [user/everyone]' gracefully through the alias
     if arg1.lower() == "unlock" and arg2:
-        try:
-            member = await commands.MemberConverter().convert(ctx, arg2)
-        except commands.MemberNotFound:
-            return await ctx.send("User not found. Please mention a valid user.")
-        
+        target = arg2
         uwu_data = load_json(UWULOCK_FILE, dict)
+        
+        if target.lower() == "everyone":
+            if uwu_data.pop("everyone", None):
+                save_json(UWULOCK_FILE, uwu_data)
+                return await ctx.send("🔓 The server wide UwU curse has been lifted!")
+            return await ctx.send("The server is not currently globally UwU locked.")
+            
+        try:
+            member = await commands.MemberConverter().convert(ctx, target)
+        except commands.MemberNotFound:
+            return await ctx.send("User not found. Please mention a valid user or type `everyone`.")
+            
         if str(member.id) in uwu_data:
             del uwu_data[str(member.id)]
             save_json(UWULOCK_FILE, uwu_data)
             return await ctx.send(f"🔓 {member.mention} has been released from the UwU curse.")
         return await ctx.send(f"{member.mention} is not currently UwU locked.")
         
-    # This logic permits both '!sedse uwulock @user' and '!sedse uwu lock @user'
+    # This logic permits both '!sedse uwulock [user/everyone]' and '!sedse uwu lock [user/everyone]'
     member_str = arg2 if arg1.lower() == "lock" and arg2 else arg1
     
+    uwu_data = load_json(UWULOCK_FILE, dict)
+    
+    if member_str.lower() == "everyone":
+        if not uwu_data.get("everyone"):
+            uwu_data["everyone"] = True
+            save_json(UWULOCK_FILE, uwu_data)
+            return await ctx.send("🔒 The entire server is now UwU locked! :3")
+        return await ctx.send("The entire server is already UwU locked! :3")
+        
     try:
         member = await commands.MemberConverter().convert(ctx, member_str)
     except commands.MemberNotFound:
-        return await ctx.send("User not found. Please mention a valid user.")
+        return await ctx.send("User not found. Please mention a valid user or type `everyone`.")
         
-    uwu_data = load_json(UWULOCK_FILE, dict)
     user_id = str(member.id)
     
     if user_id not in uwu_data:
@@ -339,16 +356,28 @@ async def uwulock(ctx, arg1: str, arg2: str = None):
 
 @bot.command()
 @check_perms("uwulock", manage_messages=True)
-async def uwuunlock(ctx, member: discord.Member):
+async def uwuunlock(ctx, target: str):
     uwu_data = load_json(UWULOCK_FILE, dict)
-    user_id = str(member.id)
     
+    if target.lower() == "everyone":
+        if uwu_data.pop("everyone", None):
+            save_json(UWULOCK_FILE, uwu_data)
+            return await ctx.send("🔓 The server wide UwU curse has been lifted!")
+        return await ctx.send("The server is not currently globally UwU locked.")
+        
+    try:
+        member = await commands.MemberConverter().convert(ctx, target)
+    except commands.MemberNotFound:
+        return await ctx.send("User not found. Please mention a valid user or type `everyone`.")
+        
+    user_id = str(member.id)
     if user_id in uwu_data:
         del uwu_data[user_id]
         save_json(UWULOCK_FILE, uwu_data)
         await ctx.send(f"🔓 {member.mention} has been released from the UwU curse.")
     else:
         await ctx.send(f"{member.mention} is not currently UwU locked.")
+
 
 @bot.command()
 @commands.is_owner()
