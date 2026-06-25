@@ -23,6 +23,7 @@ PERMS_FILE = "perms.json"
 MUTED_ADMINS_FILE = "muted_admins.json"
 UWULOCK_FILE = "uwulock.json"
 QUOTAS_FILE = "quotas.json"
+WHITELIST_FILE = "whitelist.json" # added for the whitelist system
 
 # Important Role IDs
 ROLE_SCRIPT_USER_ID = 1500435366812061844
@@ -308,6 +309,10 @@ async def check_and_increment_quota(ctx, command_name):
     save_json(QUOTAS_FILE, quotas)
     return True
 
+def is_whitelisted(guild_id, user_id):
+    wl_data = load_json(WHITELIST_FILE, dict)
+    return str(user_id) in wl_data.get(str(guild_id), [])
+
 class DynamicRateLimitError(commands.CheckFailure):
     def __init__(self, message):
         self.message = message
@@ -432,6 +437,35 @@ async def on_ready():
 # 5. COMMANDS
 # ==========================================
 
+@bot.command()
+@check_perms("whitelist", administrator=True)
+async def whitelist(ctx, member: discord.Member):
+    wl_data = load_json(WHITELIST_FILE, dict)
+    guild_id = str(ctx.guild.id)
+    
+    if guild_id not in wl_data:
+        wl_data[guild_id] = []
+        
+    if str(member.id) not in wl_data[guild_id]:
+        wl_data[guild_id].append(str(member.id))
+        save_json(WHITELIST_FILE, wl_data)
+        await ctx.send(f"put {member.mention} on the whitelist. they're completely safe now.")
+    else:
+        await ctx.send(f"{member.mention} is already on the whitelist.")
+
+@bot.command()
+@check_perms("unwhitelist", administrator=True)
+async def unwhitelist(ctx, member: discord.Member):
+    wl_data = load_json(WHITELIST_FILE, dict)
+    guild_id = str(ctx.guild.id)
+    
+    if guild_id in wl_data and str(member.id) in wl_data[guild_id]:
+        wl_data[guild_id].remove(str(member.id))
+        save_json(WHITELIST_FILE, wl_data)
+        await ctx.send(f"took {member.mention} off the whitelist. fair game again.")
+    else:
+        await ctx.send(f"{member.mention} isn't even on the whitelist.")
+
 @bot.command(aliases=["uwu"]) 
 @check_perms("uwulock", manage_messages=True)
 async def uwulock(ctx, arg1: str, arg2: str = None):
@@ -440,6 +474,8 @@ async def uwulock(ctx, arg1: str, arg2: str = None):
         uwu_data = load_json(UWULOCK_FILE, dict)
         
         if target.lower() == "everyone":
+            if not await is_mod_owner(ctx):
+                return await ctx.send("only sedse can unlock everyone, nice try.")
             if uwu_data.pop("everyone", None):
                 save_json(UWULOCK_FILE, uwu_data)
                 return await ctx.send("the whole server uwu curse is gone.")
@@ -460,6 +496,8 @@ async def uwulock(ctx, arg1: str, arg2: str = None):
     uwu_data = load_json(UWULOCK_FILE, dict)
     
     if member_str.lower() == "everyone":
+        if not await is_mod_owner(ctx):
+            return await ctx.send("only sedse can do the everyone lock, nice try.")
         if not uwu_data.get("everyone"):
             uwu_data["everyone"] = True
             save_json(UWULOCK_FILE, uwu_data)
@@ -484,6 +522,8 @@ async def uwulock(ctx, arg1: str, arg2: str = None):
 async def uwuunlock(ctx, target: str):
     uwu_data = load_json(UWULOCK_FILE, dict)
     if target.lower() == "everyone":
+        if not await is_mod_owner(ctx):
+            return await ctx.send("only sedse can unlock everyone, nice try.")
         if uwu_data.pop("everyone", None):
             save_json(UWULOCK_FILE, uwu_data)
             return await ctx.send("the whole server uwu curse is gone.")
@@ -505,6 +545,9 @@ async def uwuunlock(ctx, target: str):
 @bot.command()
 @commands.is_owner()
 async def forcemute(ctx, member: discord.Member, duration_str: str = "1h", *, reason="sedse override"):
+    if is_whitelisted(ctx.guild.id, member.id):
+        return await ctx.send(f"{member.mention} is on the whitelist. unwhitelist them first if you really wanna mute them.")
+
     duration = parse_duration(duration_str) or timedelta(hours=1)
     exempt_roles = [ROLE_SCRIPT_USER_ID, ROLE_VERIFIED_ID]
     
@@ -665,6 +708,9 @@ async def afk(ctx, *, message="afk"):
 @bot.command()
 @check_perms("kick", kick_members=True)
 async def kick(ctx, member: discord.Member, *, reason="no reason"):
+    if is_whitelisted(ctx.guild.id, member.id):
+        return await ctx.send(f"{member.mention} is on the whitelist, can't touch them.")
+
     if not await check_and_increment_quota(ctx, "kick"):
         return await ctx.send(f"{ctx.author.mention}, you hit your daily limit of 10 kicks. take a break.")
 
@@ -675,6 +721,9 @@ async def kick(ctx, member: discord.Member, *, reason="no reason"):
 @bot.command()
 @check_perms("ban", ban_members=True)
 async def ban(ctx, member: discord.Member, *, reason="no reason"):
+    if is_whitelisted(ctx.guild.id, member.id):
+        return await ctx.send(f"{member.mention} is on the whitelist, can't touch them.")
+
     is_owner = await is_mod_owner(ctx)
     
     if (not reason or reason.strip() == "no reason") and not is_owner:
@@ -710,6 +759,9 @@ async def ban(ctx, member: discord.Member, *, reason="no reason"):
 @bot.command(aliases=["mute"])
 @check_perms("timeout", moderate_members=True)
 async def timeout(ctx, member: discord.Member, duration_str: str = None, *, reason="no reason"):
+    if is_whitelisted(ctx.guild.id, member.id):
+        return await ctx.send(f"{member.mention} is on the whitelist, can't touch them.")
+
     is_owner = await is_mod_owner(ctx)
     duration = None
     actual_reason = reason
@@ -751,6 +803,9 @@ async def timeout(ctx, member: discord.Member, duration_str: str = None, *, reas
 @bot.command()
 @check_perms("warn", manage_messages=True)
 async def warn(ctx, member: discord.Member, *, reason="no reason"):
+    if is_whitelisted(ctx.guild.id, member.id):
+        return await ctx.send(f"{member.mention} is on the whitelist, can't touch them.")
+
     if (not reason or reason.strip() == "no reason") and not await is_mod_owner(ctx):
         view = ReasonView(ctx)
         msg = await ctx.send(f"{ctx.author.mention} {ctx.author.mention} yo, you need to give a reason. click the button and type it out within 5 mins or you're getting muted.", view=view)
@@ -783,6 +838,9 @@ async def warn(ctx, member: discord.Member, *, reason="no reason"):
 @bot.command()
 @check_perms("softban", ban_members=True)
 async def softban(ctx, member: discord.Member, *, reason="no reason"):
+    if is_whitelisted(ctx.guild.id, member.id):
+        return await ctx.send(f"{member.mention} is on the whitelist, can't touch them.")
+
     await member.ban(reason=f"softban: {reason}", delete_message_seconds=604800)
     await ctx.guild.unban(member, reason="softban release")
     await ctx.send(f"softbanned {member.mention} (kicked and deleted their messages).")
@@ -913,6 +971,9 @@ async def coinflip(ctx):
 @bot.command()
 @check_perms("annihilate", administrator=True)
 async def annihilate(ctx, member: discord.Member):
+    if is_whitelisted(ctx.guild.id, member.id):
+        return await ctx.send(f"{member.mention} is on the whitelist, can't touch them.")
+
     allowed_role_ids = [ROLE_SCRIPT_USER_ID, ROLE_VERIFIED_ID]
     roles_to_remove = [r for r in member.roles if r.id not in allowed_role_ids and r.name != "@everyone"]
     
