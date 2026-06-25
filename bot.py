@@ -20,7 +20,8 @@ WARNINGS_FILE = "warnings.json"
 SETTINGS_FILE = "settings.json"
 AFK_FILE = "afk.json"
 PERMS_FILE = "perms.json"
-MUTED_ADMINS_FILE = "muted_admins.json" # Added for the force-mute system
+MUTED_ADMINS_FILE = "muted_admins.json"
+UWULOCK_FILE = "uwulock.json" # Added for the UwU lock system
 
 # Important Role IDs
 ROLE_SCRIPT_USER_ID = 1500435366812061844
@@ -139,6 +140,41 @@ bot = MyBot()
 # 3. HELPER FUNCTIONS
 # ==========================================
 
+UWU_EMOJIS = [
+    "(ᵘʷᵘ)", "(ᴜ‿ᴜ✿)", "~(˘▾˘~)", "UwU", "(˘³˘)", "owo", 
+    "( ｡ᵘ ᵕ ᵘ ｡)", "(◦ᵕ ˘ ᵕ◦)", "(⑅˘꒳˘)", "^w^", "(。U ω U。)"
+]
+
+def uwuify(text):
+    # Rule 3: "r" and "l" become "w"
+    text = text.replace('r', 'w').replace('l', 'w')
+    text = text.replace('R', 'W').replace('L', 'W')
+
+    # Rule 2: insert "y" between n and a vowel
+    text = re.sub(r'n([aeiou])', r'ny\1', text)
+    text = re.sub(r'N([aeiou])', r'Ny\1', text)
+    text = re.sub(r'N([AEIOU])', r'NY\1', text)
+    
+    words = text.split()
+    result = []
+    for word in words:
+        # Rule 1: Stuttering (avoiding breaking custom emojis/mentions)
+        if not (word.startswith("<@") or word.startswith("<#") or word.startswith("<:")):
+            match = re.search(r'[a-zA-Z0-9]', word)
+            if match:
+                first_char = match.group()
+                stutter_count = random.randint(1, 3)
+                stutter = f"{first_char}-" * stutter_count
+                word = word[:match.start()] + stutter + word[match.start():]
+        
+        result.append(word)
+        
+        # Rule 4: Keyboard emojis insertion (high chance after every word)
+        if random.random() < 0.8:
+            result.append(random.choice(UWU_EMOJIS))
+            
+    return " ".join(result)
+
 async def send_log(guild, title, description, color):
     settings = load_json(SETTINGS_FILE, dict)
     log_channel_id = settings.get(str(guild.id), {}).get("log_channel")
@@ -229,6 +265,31 @@ async def on_message(message):
                 afk_msg = afk_data[mentioned_id]["message"]
                 await message.channel.send(f"{mentioned_user.display_name} is currently AFK: {afk_msg}")
 
+    # UwU Lock System Intercept
+    uwu_data = load_json(UWULOCK_FILE, dict)
+    if str(message.author.id) in uwu_data:
+        uwu_text = uwuify(message.content) if message.content.strip() else random.choice(UWU_EMOJIS)
+        
+        if len(uwu_text) > 2000:
+            uwu_text = uwu_text[:1997] + "..."
+            
+        try:
+            webhooks = await message.channel.webhooks()
+            webhook = discord.utils.get(webhooks, name="Sedse Impersonator")
+            if not webhook:
+                webhook = await message.channel.create_webhook(name="Sedse Impersonator")
+            
+            await webhook.send(
+                content=uwu_text,
+                username=message.author.display_name,
+                avatar_url=message.author.display_avatar.url if message.author.display_avatar else None,
+                wait=False
+            )
+            await message.delete()
+        except Exception as e:
+            print(f"UwU lock webhook error: {e}")
+        return # Return here stops bot commands from triggering for locked users
+
     await bot.process_commands(message)
 
 @bot.event
@@ -238,6 +299,29 @@ async def on_ready():
 # ==========================================
 # 5. COMMANDS
 # ==========================================
+
+@bot.command(aliases=["uwu"]) # Aliases allow "!sedse uwu lock @user" to trigger this function seamlessly
+@check_perms("uwulock", manage_messages=True)
+async def uwulock(ctx, arg1: str, arg2: str = None):
+    # This logic permits both '!sedse uwulock @user' and '!sedse uwu lock @user' 
+    member_str = arg2 if arg1.lower() == "lock" and arg2 else arg1
+    
+    try:
+        member = await commands.MemberConverter().convert(ctx, member_str)
+    except commands.MemberNotFound:
+        return await ctx.send("User not found. Please mention a valid user.")
+        
+    uwu_data = load_json(UWULOCK_FILE, dict)
+    user_id = str(member.id)
+    
+    if user_id in uwu_data:
+        del uwu_data[user_id]
+        save_json(UWULOCK_FILE, uwu_data)
+        await ctx.send(f"🔓 {member.mention} has been released from the UwU curse.")
+    else:
+        uwu_data[user_id] = True
+        save_json(UWULOCK_FILE, uwu_data)
+        await ctx.send(f"🔒 {member.mention} is now UwU locked! :3")
 
 @bot.command()
 @commands.is_owner()
