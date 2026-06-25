@@ -318,43 +318,55 @@ async def on_command_error(ctx, error):
 
 @bot.event
 async def on_message(message):
-    if message.author.bot: return
+    if message.author.bot: 
+        return
 
     # --- MINI AUTO MOD ---
-    slur_pattern = r'\bnigger\b' 
+    # Regex catches: nigga, nigger, niggah, niggar, niggas, niggers
+    slur_pattern = r'\bnigg[ae]r?h?s?\b'
+    
     if re.search(slur_pattern, message.content.lower()):
-        # check immunity
-        dummy_ctx = discord.s_ctx if 'discord.s_ctx' in locals() else None # helper
-        is_owner = False
+        # 1. Check Immunity (Server Owner, Bot Owner, or Whitelist)
+        is_immune = False
         if message.guild:
-            # Check if they are the guild owner or bot owner
-            if message.author == message.guild.owner: is_owner = True
-            # Check whitelist
-            if is_whitelisted(message.guild.id, message.author.id): is_owner = True
+            if message.author == message.guild.owner or await bot.is_owner(message.author):
+                is_immune = True
+            elif is_whitelisted(message.guild.id, message.author.id):
+                is_immune = True
         
-        if not is_owner:
-            # check if mod
+        if not is_immune:
+            # 2. Handle Moderators (Administrator or Moderate Members permission)
             if message.author.guild_permissions.administrator or message.author.guild_permissions.moderate_members:
                 user_id = str(message.author.id)
                 now = discord.utils.utcnow().timestamp()
+                
+                # Check if they were warned in the last 5 minutes (300 seconds)
                 if user_id in mod_slur_warnings and now - mod_slur_warnings[user_id] < 300:
                     try:
-                        await message.author.timeout(discord.utils.utcnow() + timedelta(hours=1), reason="repeated slur use")
+                        await message.author.timeout(discord.utils.utcnow() + timedelta(hours=1), reason="Repeated slur use as staff")
                         await message.channel.send(f"told you once already. {message.author.mention} is muted for an hour.")
+                        await send_log(message.guild, "Mod Auto-Mute", f"**Mod:** {message.author.mention}\n**Reason:** Repeated slur use", discord.Color.red())
                         del mod_slur_warnings[user_id]
                     except discord.Forbidden:
-                        await message.channel.send("i tried to mute the mod but i don't have perms.")
+                        await message.channel.send("tried to mute the mod but i don't have perms.")
                 else:
+                    # First warning for staff
                     mod_slur_warnings[user_id] = now
                     await message.channel.send(f"language buddy, {message.author.mention} you're getting muted next time you say it.")
+            
+            # 3. Handle Regular Users
             else:
-                # regular user
                 try:
-                    await message.author.timeout(discord.utils.utcnow() + timedelta(hours=1), reason="slur use")
-                    await message.channel.send(f"{message.author.mention} got muted for an hour for that. chill.")
+                    # Delete message first
                     await message.delete()
+                    # Apply 1 hour timeout
+                    await message.author.timeout(discord.utils.utcnow() + timedelta(hours=1), reason="Slur use (Auto-Mod)")
+                    await message.channel.send(f"{message.author.mention} got muted for an hour for that. chill.")
+                    await send_log(message.guild, "Auto-Mod Mute", f"**User:** {message.author.mention}\n**Reason:** Slur usage", discord.Color.orange())
                 except discord.Forbidden:
-                    await message.channel.send("tried to mute them but i can't.")
+                    await message.channel.send(f"tried to mute {message.author.mention} but i don't have permissions.")
+            
+            return # Stop processing other checks if a slur was found
 
     # --- HONEYPOT ---
     if message.channel.id in bot.honeypot_channels:
@@ -375,6 +387,7 @@ async def on_message(message):
         save_json(AFK_FILE, afk_data)
         welcome_msg = await message.channel.send(f"wb {message.author.mention}, took off your afk status.")
         await welcome_msg.delete(delay=5)
+    
     if message.mentions:
         for mentioned_user in message.mentions:
             mid = str(mentioned_user.id)
@@ -382,10 +395,10 @@ async def on_message(message):
                 await message.channel.send(f"{mentioned_user.display_name} is afk right now: {afk_data[mid]['message']}")
 
     # --- UWU LOCK ---
-    is_uwu_cmd = message.content.lower().startswith(("!sedse uwu", "!uwu"))
+    is_uwu_cmd = message.content.lower().startswith(("!sedse uwu", "!uwu", "!sedse lock", "!sedse unlock"))
     uwu_data = load_json(UWULOCK_FILE, dict)
     if not is_uwu_cmd and (uwu_data.get("everyone") or str(message.author.id) in uwu_data):
-        uwu_text = uwuify(message.content) if message.content.strip() else random.choice(UWU_EMOJIS)
+        uwu_text = uwuify(message.content) if message.content.strip() else random.choice(UW_EMOJIS)
         if len(uwu_text) > 2000: uwu_text = uwu_text[:1997] + "..."
         try:
             webhooks = await message.channel.webhooks()
