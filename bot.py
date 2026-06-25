@@ -438,8 +438,10 @@ async def on_ready():
 # ==========================================
 
 @bot.command()
-@check_perms("whitelist", administrator=True)
 async def whitelist(ctx, member: discord.Member):
+    if not await is_mod_owner(ctx):
+        return await ctx.send("only sedse can mess with the whitelist, back off.")
+
     wl_data = load_json(WHITELIST_FILE, dict)
     guild_id = str(ctx.guild.id)
     
@@ -454,8 +456,10 @@ async def whitelist(ctx, member: discord.Member):
         await ctx.send(f"{member.mention} is already on the whitelist.")
 
 @bot.command()
-@check_perms("unwhitelist", administrator=True)
 async def unwhitelist(ctx, member: discord.Member):
+    if not await is_mod_owner(ctx):
+        return await ctx.send("only sedse can touch this, go away.")
+
     wl_data = load_json(WHITELIST_FILE, dict)
     guild_id = str(ctx.guild.id)
     
