@@ -6,6 +6,7 @@ import sys
 import random
 import re
 import asyncio
+import aiohttp
 from datetime import timedelta
 from typing import Union
 from discord.ext import commands
@@ -1182,6 +1183,35 @@ async def zalgo(ctx, *, text: str):
     marks = [chr(i) for i in range(0x0300, 0x036F)]
     res = "".join([char + "".join(random.choices(marks, k=random.randint(3, 8))) for char in text])
     await ctx.send(res[:2000])
+
+@bot.command()
+async def rizz(ctx, member: discord.Member = None):
+    if member is None:
+        return await ctx.send("you gotta ping someone to rizz them up.")
+        
+    fallback_lines = [
+        "Are you a keyboard? Because you're just my type.",
+        "Are you a parking ticket? Because you've got FINE written all over you.",
+        "If you were a vegetable, you'd be a cute-cumber.",
+        "Do you have a map? I keep getting lost in your eyes.",
+        "Are you French? Because Eiffel for you.",
+        "Is your name Google? Because you have everything I've been searching for."
+    ]
+    
+    pickup_line = random.choice(fallback_lines)
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            # Popcat has a reliable free API endpoint for these
+            async with session.get("https://api.popcat.xyz/pickupline", timeout=5) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if "pickupline" in data:
+                        pickup_line = data["pickupline"]
+    except Exception as e:
+        print(f"pickup line api failed: {e}")
+        
+    await ctx.send(f"{member.mention} {pickup_line}")
 
 # ==========================================
 # 6. RUN
