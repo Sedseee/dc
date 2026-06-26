@@ -26,6 +26,117 @@ UWULOCK_FILE = "uwulock.json"
 QUOTAS_FILE = "quotas.json"
 WHITELIST_FILE = "whitelist.json"
 PRIORITY_WHITELIST_FILE = "priority_whitelist.json"
+UMARIZZ_FILE = "umarizz.json"
+
+# Auto-generate umarizz.json if it's missing (with the fixed syntax)
+UMARIZZ_DEFAULT_DATA = {
+  "umamusume_pickup_lines": [
+    {"id": 1, "category": "The Trainer's Menu (General Lines)", "line": "Are you a Trainer? Because my heart starts racing the moment you're around."},
+    {"id": 2, "category": "The Trainer's Menu (General Lines)", "line": "Are you the URA Finals? Because you're my ultimate goal."},
+    {"id": 3, "category": "The Trainer's Menu (General Lines)", "line": "My stamina might be at an E, but my love for you is always S+."},
+    {"id": 4, "category": "The Trainer's Menu (General Lines)", "line": "Forget the training menu—my only plan today is spending time with you."},
+    {"id": 5, "category": "The Trainer's Menu (General Lines)", "line": "Are you a rainbow gate? Because seeing you guarantees it's going to be a good day."},
+    {"id": 6, "category": "The Trainer's Menu (General Lines)", "line": "I must have maxed out my wisdom stat, because choosing you was the smartest thing I've ever done."},
+    {"id": 7, "category": "The Trainer's Menu (General Lines)", "line": "Are you an alarm clock? Because you just gave me a second chance at love."},
+    {"id": 8, "category": "The Trainer's Menu (General Lines)", "line": "My motivation just went from \"Hopeless\" to \"Perfect\" the second you walked in."},
+    {"id": 9, "category": "The Trainer's Menu (General Lines)", "line": "I don't need a high-speed summer training camp if I can just spend the season with you."},
+    {"id": 10, "category": "The Trainer's Menu (General Lines)", "line": "You must be an Inherited Factor, because you’ve completely changed my traits for the better."},
+    {"id": 11, "category": "Character-Specific Charmers", "line": "Are you Special Week? Because you're the best in Japan in my eyes."},
+    {"id": 12, "category": "Character-Specific Charmers", "line": "Are you Silence Suzuka? Because you took my breath away on the very first turn."},
+    {"id": 13, "category": "Character-Specific Charmers", "line": "Call me Gold Ship, because I'm ready to drop-kick my way directly into your heart."},
+    {"id": 14, "category": "Character-Specific Charmers", "line": "Are you Tokai Teio? Because you’ve got me skipping with joy."},
+    {"id": 15, "category": "Character-Specific Charmers", "line": "Are you Oguri Cap? Because my hunger for your love is absolutely insatiable."},
+    {"id": 16, "category": "Character-Specific Charmers", "line": "Are you Rice Shower? Because you’ve blessed my life, no matter what anyone else says."},
+    {"id": 17, "category": "Character-Specific Charmers", "line": "Are you Mejiro McQueen? Because you’ve got elegance written all over you—let me buy you some sweets."},
+    {"id": 18, "category": "Character-Specific Charmers", "line": "Are you Twin Turbo? Because I’m going all-out from the very start with you."},
+    {"id": 19, "category": "Character-Specific Charmers", "line": "Are you Mihono Bourbon? Because my heart is programmed to love only you."},
+    {"id": 20, "category": "Character-Specific Charmers", "line": "Are you Daiwa Scarlet? Because you’ll always be number one to me."},
+    {"id": 21, "category": "Character-Specific Charmers", "line": "Are you Vodka? Because you’re absolutely intoxicating."},
+    {"id": 22, "category": "Character-Specific Charmers", "line": "Are you Gold City? Because you look like a literal runway model."},
+    {"id": 23, "category": "Character-Specific Charmers", "line": "Are you Agnes Tachyon? Because the chemistry between us is undeniable."},
+    {"id": 24, "category": "Character-Specific Charmers", "line": "Are you Manhattan Cafe? Because you're brewing up a lot of deep feelings in me."},
+    {"id": 25, "category": "Character-Specific Charmers", "line": "Are you El Condor Pasa? Because our love is burning like a fiery luchador."},
+    {"id": 26, "category": "Character-Specific Charmers", "line": "Are you Grass Wonder? Because you look calm, but you've completely conquered my heart."},
+    {"id": 27, "category": "Character-Specific Charmers", "line": "Are you King Halo? Because you deserve a royal place in my life."},
+    {"id": 28, "category": "Character-Specific Charmers", "line": "Are you Nice Nature? Because even if you think you're third place, you're always first to me."},
+    {"id": 29, "category": "Character-Specific Charmers", "line": "Are you Symboli Rudolf? Because you’re the absolute Emperor of my heart."},
+    {"id": 30, "category": "Character-Specific Charmers", "line": "Are you Maruzensky? Because you're super-car fast at stealing my feelings."},
+    {"id": 31, "category": "Character-Specific Charmers", "line": "Are you Mayano Top Gun? Because you've got me flying high in the clouds."},
+    {"id": 32, "category": "Character-Specific Charmers", "line": "Are you Super Creek? Because I could really use some of your pampering right now."},
+    {"id": 33, "category": "Character-Specific Charmers", "line": "Are you Tamamo Cross? Because you're a small package with a whole lot of impact."},
+    {"id": 34, "category": "Character-Specific Charmers", "line": "Are you Fine Motion? Because our connection feels like a royal decree."},
+    {"id": 35, "category": "Character-Specific Charmers", "line": "Are you Air Groove? Because you've got absolute control over my heart's climate."},
+    {"id": 36, "category": "Character-Specific Charmers", "line": "Are you Eishin Flash? Because everything with you is perfectly timed and precise."},
+    {"id": 37, "category": "Character-Specific Charmers", "line": "Are you Smart Falcon? Because you're the ultimate center idol of my world."},
+    {"id": 38, "category": "Character-Specific Charmers", "line": "Are you Curren Chan? Because you’ve completely captured my feed and my heart."},
+    {"id": 39, "category": "Character-Specific Charmers", "line": "Are you Kitasan Black? Because you bring festival energy wherever you go."},
+    {"id": 40, "category": "Character-Specific Charmers", "line": "Are you Satono Diamond? Because you're a rare gem I want to cherish forever."},
+    {"id": 41, "category": "Track Conditions & Race Strategy", "line": "Are you a turf track? Because I'm falling for you smoothly."},
+    {"id": 42, "category": "Track Conditions & Race Strategy", "line": "Even if the track condition is \"Bad,\" my feelings for you are always \"Good.\""},
+    {"id": 43, "category": "Track Conditions & Race Strategy", "line": "Are you the final straight? Because I’m giving it everything I've got to catch up to you."},
+    {"id": 44, "category": "Track Conditions & Race Strategy", "line": "Forget the inner track, I want to take the long way around just to spend more time with you."},
+    {"id": 45, "category": "Track Conditions & Race Strategy", "line": "Are you the Arima Kinen? Because you're the grand finale I've been waiting for all year."},
+    {"id": 46, "category": "Track Conditions & Race Strategy", "line": "Are you the Japan Cup? Because you’ve attracted international attention, but I only have eyes for you."},
+    {"id": 47, "category": "Track Conditions & Race Strategy", "line": "I'd run through a muddy dirt track just to see you smile."},
+    {"id": 48, "category": "Track Conditions & Race Strategy", "line": "Are you an uphill slope? Because you make my heart beat faster and harder."},
+    {"id": 49, "category": "Track Conditions & Race Strategy", "line": "Are you the starting gate? Because I’m ready to burst out and chase you down."},
+    {"id": 50, "category": "Track Conditions & Race Strategy", "line": "You must be a 2400m race, because I'm in this relationship for the long haul."},
+    {"id": 51, "category": "Skills & Stat Check", "line": "Did you just activate \"Maestro of the Corner\"? Because you smoothly navigated right into my heart."},
+    {"id": 52, "category": "Skills & Stat Check", "line": "You must have the \"Charisma\" skill, because I literally cannot look away."},
+    {"id": 53, "category": "Skills & Stat Check", "line": "My speed stat just broke the limit when you smiled at me."},
+    {"id": 54, "category": "Skills & Stat Check", "line": "Are you a unique skill? Because you're absolutely one of a kind."},
+    {"id": 55, "category": "Skills & Stat Check", "line": "I don't need \"Sprint Turbo\" to rush over to your side."},
+    {"id": 56, "category": "Skills & Stat Check", "line": "You must have \"Tailwind,\" because you're pushing me in all the right directions."},
+    {"id": 57, "category": "Skills & Stat Check", "line": "Are you a debuff skill? Because you’ve completely paralyzed me with your looks."},
+    {"id": 58, "category": "Skills & Stat Check", "line": "I’ve got max stamina, but you still somehow leave me completely breathless."},
+    {"id": 59, "category": "Skills & Stat Check", "line": "Are you \"Guts\"? Because you give me the strength to keep going when things get tough."},
+    {"id": 60, "category": "Skills & Stat Check", "line": "Let's trigger a dynamic camera angle, because you look stunning from every single direction."},
+    {"id": 61, "category": "Winning Live & Idol Status", "line": "Are you the center position? Because you're the star of my show."},
+    {"id": 62, "category": "Winning Live & Idol Status", "line": "I’d win every G1 race on the calendar just to see you perform in the Winning Live."},
+    {"id": 63, "category": "Winning Live & Idol Status", "line": "Are you \"Make debut\"? Because this is the start of something beautiful."},
+    {"id": 64, "category": "Winning Live & Idol Status", "line": "My heart rate matches the beat of \"GIRLS' LEGEND U\" whenever you're near."},
+    {"id": 65, "category": "Winning Live & Idol Status", "line": "Are you a glow stick? Because you light up my entire world."},
+    {"id": 66, "category": "Winning Live & Idol Status", "line": "Forget the concert crowd, I'm only cheering for you."},
+    {"id": 67, "category": "Winning Live & Idol Status", "line": "Are you a Triple Crown? Because you’re a rare achievement I'd love to win."},
+    {"id": 68, "category": "Winning Live & Idol Status", "line": "You don't need a microphone to make your voice the only thing I hear."},
+    {"id": 69, "category": "Winning Live & Idol Status", "line": "Let's duet on the center stage of my heart."},
+    {"id": 70, "category": "Winning Live & Idol Status", "line": "You're the encore I'll always ask for."},
+    {"id": 71, "category": "Items, Food & Fuel", "line": "Are you a giant carrot? Because you're exactly what I've been looking for."},
+    {"id": 72, "category": "Items, Food & Fuel", "line": "You're sweeter than a freshly baked Mejiro macaron."},
+    {"id": 73, "category": "Items, Food & Fuel", "line": "Are you a carrot burger? Because you’re the perfect treat after a long, exhausting day."},
+    {"id": 74, "category": "Items, Food & Fuel", "line": "I’d share my very last carrot juice with you."},
+    {"id": 75, "category": "Items, Food & Fuel", "line": "Are you a lucky charm? Because my chances of success skyrocket when you're around."},
+    {"id": 76, "category": "Items, Food & Fuel", "line": "You must be a royal parfait, because you just maxed out my motivation levels."},
+    {"id": 77, "category": "Items, Food & Fuel", "line": "Forget the training weights, you're the only thing heavy on my mind."},
+    {"id": 78, "category": "Items, Food & Fuel", "line": "Are you a strategy playbook? Because I want to study your every move."},
+    {"id": 79, "category": "Items, Food & Fuel", "line": "You're like a high-grade energy drink—one look at you and I'm fully charged."},
+    {"id": 80, "category": "Items, Food & Fuel", "line": "Are you a secret stash of snacks? Because finding you made my whole week."},
+    {"id": 81, "category": "Playful Puns & Pacing", "line": "Are you a front-runner? Because you're way ahead of anyone else."},
+    {"id": 82, "category": "Playful Puns & Pacing", "line": "I might be a betweener, but I’m ready to make a definitive move on you."},
+    {"id": 83, "category": "Playful Puns & Pacing", "line": "Are you a chaser? Because you've been running through my mind all day long."},
+    {"id": 84, "category": "Playful Puns & Pacing", "line": "I promise I won't block your path; I just want to run right beside you."},
+    {"id": 85, "category": "Playful Puns & Pacing", "line": "Are you a photo finish? Because it’s incredibly close, but you win every single time."},
+    {"id": 86, "category": "Playful Puns & Pacing", "line": "You must be Tazuna-san, because you always know exactly how to guide me back on track."},
+    {"id": 87, "category": "Playful Puns & Pacing", "line": "Are you President Akikawa? Because you’ve got \"fan-favorite\" written all over you."},
+    {"id": 88, "category": "Playful Puns & Pacing", "line": "My love for you has a 100% success rate—absolutely zero training failure risk here."},
+    {"id": 89, "category": "Playful Puns & Pacing", "line": "Are you the green light on the gate? Because you've got me ready to go."},
+    {"id": 90, "category": "Playful Puns & Pacing", "line": "I must be out of stamina, because I'm falling incredibly hard for you."},
+    {"id": 91, "category": "Playful Puns & Pacing", "line": "Are you a 5-star awakening? Because you've reached peak absolute perfection."},
+    {"id": 92, "category": "Playful Puns & Pacing", "line": "You don't need lucky horseshoes to leave a permanent impression on my heart."},
+    {"id": 93, "category": "Playful Puns & Pacing", "line": "Are you a critical hit in training? Because you just boosted my stats immensely."},
+    {"id": 94, "category": "Playful Puns & Pacing", "line": "Even if I get a bad status condition, you're the only cure I'll ever need."},
+    {"id": 95, "category": "Playful Puns & Pacing", "line": "Are you the URA trophy? Because I want to hold you high for everyone to see."},
+    {"id": 96, "category": "Playful Puns & Pacing", "line": "You’ve got me running at a record-breaking pace just to keep up with your beauty."},
+    {"id": 97, "category": "Playful Puns & Pacing", "line": "Are you a limited-time gacha banner? Because I’m willing to spend everything I have to get you."},
+    {"id": 98, "category": "Playful Puns & Pacing", "line": "My heart is doing a full sprint, and there's no deceleration in sight."},
+    {"id": 99, "category": "Playful Puns & Pacing", "line": "Are you a stable? Because I feel completely safe and at home with you."},
+    {"id": 100, "category": "Playful Puns & Pacing", "line": "Let's cross the finish line together, because you're my ultimate prize."}
+  ]
+}
+
+if not os.path.exists(UMARIZZ_FILE):
+    with open(UMARIZZ_FILE, "w", encoding="utf-8") as f:
+        json.dump(UMARIZZ_DEFAULT_DATA, f, indent=4)
 
 # Important Role IDs
 ROLE_SCRIPT_USER_ID = 1500435366812061844
@@ -1248,6 +1359,28 @@ async def rizz(ctx, member: discord.Member = None):
                         pickup_line = data["text"]
     except Exception as e:
         print(f"pickup line api failed: {e}")
+        
+    await ctx.send(f"{member.mention} {pickup_line}")
+
+@bot.command()
+async def umarizz(ctx, member: discord.Member = None):
+    if member is None:
+        return await ctx.send("you gotta ping someone to umarizz them up.")
+        
+    try:
+        with open(UMARIZZ_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            
+        lines = data.get("umamusume_pickup_lines", [])
+        if not lines:
+            raise ValueError("No pickup lines found in the file.")
+            
+        # Pick a random line
+        pickup_line = random.choice(lines)["line"]
+    except Exception as e:
+        print(f"umarizz error: {e}")
+        # Ultimate fallback just in case the file gets deleted/corrupted
+        pickup_line = "Are you a Trainer? Because my heart starts racing the moment you're around."
         
     await ctx.send(f"{member.mention} {pickup_line}")
 
