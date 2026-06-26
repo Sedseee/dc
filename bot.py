@@ -658,10 +658,22 @@ async def priority(ctx):
     await ctx.send("you need a subcommand. try '!sedse priority whitelist [user]'.")
 
 @priority.command()
-async def whitelist(ctx, member: discord.Member):
-    if not await is_mod_owner(ctx): return await ctx.send("only sedse can mess with the priority whitelist, back off.")
+async def whitelist(ctx, member: discord.Member = None):
     pwl_data = load_json(PRIORITY_WHITELIST_FILE, dict)
     gid = str(ctx.guild.id)
+
+    # If no member is mentioned, display the list
+    if member is None:
+        users = pwl_data.get(gid, [])
+        if not users:
+            return await ctx.send("the priority whitelist is currently empty.")
+        
+        mentions = [f"<@{uid}>" for uid in users]
+        embed = discord.Embed(title="priority whitelisted users", description="\n".join(mentions), color=discord.Color.gold())
+        return await ctx.send(embed=embed)
+
+    # If a member is mentioned, add them to the whitelist
+    if not await is_mod_owner(ctx): return await ctx.send("only sedse can mess with the priority whitelist, back off.")
     if gid not in pwl_data: pwl_data[gid] = []
     if str(member.id) not in pwl_data[gid]:
         pwl_data[gid].append(str(member.id))
@@ -683,10 +695,22 @@ async def unwhitelist(ctx, member: discord.Member):
         await ctx.send(f"{member.mention} isn't even on the priority whitelist.")
 
 @bot.command()
-async def whitelist(ctx, member: discord.Member):
-    if not await is_mod_owner(ctx): return await ctx.send("only sedse can mess with the whitelist, back off.")
+async def whitelist(ctx, member: discord.Member = None):
     wl_data = load_json(WHITELIST_FILE, dict)
     gid = str(ctx.guild.id)
+    
+    # If no member is mentioned, display the list
+    if member is None:
+        users = wl_data.get(gid, [])
+        if not users:
+            return await ctx.send("the whitelist is currently empty.")
+            
+        mentions = [f"<@{uid}>" for uid in users]
+        embed = discord.Embed(title="whitelisted users", description="\n".join(mentions), color=discord.Color.green())
+        return await ctx.send(embed=embed)
+
+    # If a member is mentioned, add them to the whitelist
+    if not await is_mod_owner(ctx): return await ctx.send("only sedse can mess with the whitelist, back off.")
     if gid not in wl_data: wl_data[gid] = []
     if str(member.id) not in wl_data[gid]:
         wl_data[gid].append(str(member.id))
@@ -1075,6 +1099,20 @@ async def annihilate(ctx, member: discord.Member):
     except discord.Forbidden: await ctx.send("don't have perms.")
 
 @bot.command()
+@check_perms("hakai", administrator=True)
+async def hakai(ctx, member: discord.Member):
+    if is_priority_whitelisted(ctx.guild.id, member.id): return await ctx.send(f"{member.mention} is on the priority whitelist, can't touch them.")
+    if is_whitelisted(ctx.guild.id, member.id) and not is_priority_whitelisted(ctx.guild.id, ctx.author.id): return await ctx.send(f"{member.mention} is on the whitelist, can't touch them.")
+    exempt = [ROLE_SCRIPT_USER_ID, ROLE_VERIFIED_ID]
+    roles_to_remove = [r for r in member.roles if r.id not in exempt and r.name != "@everyone"]
+    if not roles_to_remove: return await ctx.send(f"{member.mention} doesn't have any roles i can take.")
+    try:
+        await member.remove_roles(*roles_to_remove, reason="hakai")
+        await ctx.send(f"hakai'd {member.mention}. wiped {len(roles_to_remove)} roles from existence.")
+        await send_log(ctx.guild, "user hakai'd", f"**user:** {member.mention}\n**mod:** {ctx.author.mention}", discord.Color.dark_purple())
+    except discord.Forbidden: await ctx.send("don't have perms.")
+
+@bot.command()
 async def badapple(ctx, action: str = "start"):
     global active_badapples
     if action.lower() in ["end", "stop"]:
@@ -1202,12 +1240,12 @@ async def rizz(ctx, member: discord.Member = None):
     
     try:
         async with aiohttp.ClientSession() as session:
-            # Popcat has a reliable free API endpoint for these
-            async with session.get("https://api.popcat.xyz/pickupline", timeout=5) as response:
+            # Rizz API alternative endpoint
+            async with session.get("https://rizzapi.vercel.app/random", timeout=5) as response:
                 if response.status == 200:
                     data = await response.json()
-                    if "pickupline" in data:
-                        pickup_line = data["pickupline"]
+                    if "text" in data:
+                        pickup_line = data["text"]
     except Exception as e:
         print(f"pickup line api failed: {e}")
         
