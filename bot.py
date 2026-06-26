@@ -51,6 +51,11 @@ def save_json(filename, data):
 def load_honeypots(): return load_json(HONEYPOT_FILE, list)
 def save_honeypots(data): save_json(HONEYPOT_FILE, data)
 
+class DynamicRateLimitError(commands.CheckFailure):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
 # ==========================================
 # 1. VIEWS & MODALS
 # ==========================================
@@ -172,6 +177,234 @@ class OwnerBanConfirmView(discord.ui.View):
         await interaction.message.edit(content=f"ban shot down by {interaction.user.mention}. {self.target.mention} is just gonna stay muted.", view=None)
         self.stop()
 
+# --- MODVIEW UI CLASSES ---
+
+class UnbanModal(discord.ui.Modal, title='unban user'):
+    user_id = discord.ui.TextInput(label='user id', placeholder='drop their discord id here', required=True)
+    def __init__(self, ctx):
+        super().__init__()
+        self.ctx = ctx
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        try:
+            user = await bot.fetch_user(int(self.user_id.value))
+            cmd = bot.get_command('unban')
+            if await cmd.can_run(self.ctx):
+                await self.ctx.invoke(cmd, user=user)
+                await interaction.followup.send(f"unbanned {user.name}.", ephemeral=True)
+        except commands.CheckFailure:
+            await interaction.followup.send("you lack perms.", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"failed: {e}", ephemeral=True)
+
+class PermsModal(discord.ui.Modal, title='edit perms'):
+    cmd_name = discord.ui.TextInput(label='command name', placeholder='e.g. kick, ban, all', required=True)
+    target_id = discord.ui.TextInput(label='target id', placeholder='user or role id', required=True)
+    def __init__(self, ctx):
+        super().__init__()
+        self.ctx = ctx
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        try:
+            target_obj = self.ctx.guild.get_member(int(self.target_id.value)) or self.ctx.guild.get_role(int(self.target_id.value))
+            if not target_obj: return await interaction.followup.send("couldn't find that user or role.", ephemeral=True)
+            cmd = bot.get_command('perm')
+            if await cmd.can_run(self.ctx):
+                await self.ctx.invoke(cmd, command_name=self.cmd_name.value, target=target_obj)
+                await interaction.followup.send(f"updated perms for {self.cmd_name.value}.", ephemeral=True)
+        except commands.CheckFailure:
+            await interaction.followup.send("you lack perms.", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"failed: {e}", ephemeral=True)
+
+class ModActionModal(discord.ui.Modal):
+    def __init__(self, action, target, ctx):
+        super().__init__(title=f"{action} target"[:45])
+        self.action = action
+        self.target = target
+        self.ctx = ctx
+
+        if self.action in ["mute", "forcemute"]:
+            self.duration = discord.ui.TextInput(label="duration", placeholder="e.g. 10m, 1h, 1d", default="1h", required=True, max_length=20)
+            self.add_item(self.duration)
+
+        self.reason = discord.ui.TextInput(label="reason", placeholder="spill the reason", default="no reason", required=False, max_length=300)
+        self.add_item(self.reason)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        cmd_map = {"warn": "warn", "mute": "timeout", "kick": "kick", "ban": "ban", "softban": "softban", "forcemute": "forcemute"}
+        try:
+            cmd = bot.get_command(cmd_map[self.action])
+            if await cmd.can_run(self.ctx):
+                kw = {"member": self.target, "reason": self.reason.value}
+                if self.action in ["mute", "forcemute"]: kw["duration_str"] = self.duration.value
+                await self.ctx.invoke(cmd, **kw)
+                await interaction.followup.send(f"dropped the hammer on {self.target.mention} with {self.action}.", ephemeral=True)
+        except DynamicRateLimitError as e:
+            await interaction.followup.send(e.message, ephemeral=True)
+        except commands.CheckFailure:
+            await interaction.followup.send("you lack perms for this.", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"something broke: {e}", ephemeral=True)
+
+class ModView(discord.ui.View):
+    def __init__(self, ctx):
+        super().__init__(timeout=600)
+        self.ctx = ctx
+        self.category = None
+        self.action = None
+        self.target = None
+
+        self.category_select = discord.ui.Select(
+            placeholder="pick a category...",
+            options=[
+                discord.SelectOption(label="punish", description="smite someone"),
+                discord.SelectOption(label="pardon", description="forgive someone"),
+                discord.SelectOption(label="whitelist", description="manage protections"),
+                discord.SelectOption(label="server & perms", description="locks, perms, honeypots")
+            ],
+            row=0
+        )
+        self.category_select.callback = self.category_cb
+        self.add_item(self.category_select)
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user != self.ctx.author:
+            await interaction.response.send_message("this menu ain't for you.", ephemeral=True)
+            return False
+        return True
+
+    async def category_cb(self, interaction: discord.Interaction):
+        self.category = self.category_select.values[0]
+        self.action = None
+        self.target = None
+        self.rebuild_ui()
+        await interaction.response.edit_message(view=self)
+
+    def rebuild_ui(self):
+        self.clear_items()
+        self.add_item(self.category_select)
+        if not self.category: return
+
+        opts = []
+        if self.category == "punish": opts = ["warn", "mute", "kick", "ban", "softban", "forcemute", "annihilate"]
+        elif self.category == "pardon": opts = ["unmute", "forceunmute", "clear warnings", "unban"]
+        elif self.category == "whitelist": opts = ["add whitelist", "remove whitelist", "add priority", "remove priority"]
+        elif self.category == "server & perms": opts = ["lock channel", "unlock channel", "uwulock user", "uwulock server", "uwu unlock server", "toggle honeypot", "edit perms"]
+
+        self.action_select = discord.ui.Select(
+            placeholder="pick an action...",
+            options=[discord.SelectOption(label=opt) for opt in opts],
+            row=1
+        )
+        self.action_select.callback = self.action_cb
+        self.add_item(self.action_select)
+
+        if self.action:
+            needs_user = self.action in ["warn", "mute", "kick", "ban", "softban", "forcemute", "annihilate", "unmute", "forceunmute", "clear warnings", "add whitelist", "remove whitelist", "add priority", "remove priority", "uwulock user"]
+            needs_channel = self.action in ["lock channel", "unlock channel", "toggle honeypot"]
+            needs_exec = self.action in ["unban", "uwulock server", "uwu unlock server", "edit perms"]
+
+            if needs_user:
+                class DynamicUserSelect(discord.ui.UserSelect):
+                    def __init__(inner_self, **kwargs): super().__init__(**kwargs)
+                    async def callback(inner_self, interaction: discord.Interaction):
+                        self.target = inner_self.values[0]
+                        await self.handle_action(interaction)
+                self.add_item(DynamicUserSelect(placeholder="select target user...", row=2))
+
+            elif needs_channel:
+                class DynamicChannelSelect(discord.ui.ChannelSelect):
+                    def __init__(inner_self, **kwargs): super().__init__(**kwargs)
+                    async def callback(inner_self, interaction: discord.Interaction):
+                        self.target = inner_self.values[0]
+                        await self.handle_action(interaction)
+                self.add_item(DynamicChannelSelect(placeholder="select target channel...", channel_types=[discord.ChannelType.text], row=2))
+
+            elif needs_exec:
+                btn = discord.ui.Button(label="execute action", style=discord.ButtonStyle.grey, row=2)
+                async def btn_cb(interaction: discord.Interaction):
+                    await self.handle_action(interaction)
+                btn.callback = btn_cb
+                self.add_item(btn)
+
+    async def action_cb(self, interaction: discord.Interaction):
+        self.action = self.action_select.values[0]
+        self.rebuild_ui()
+        await interaction.response.edit_message(view=self)
+
+    async def handle_action(self, interaction: discord.Interaction):
+        needs_modal = self.action in ["warn", "mute", "kick", "ban", "softban", "forcemute"]
+        if needs_modal:
+            await interaction.response.send_modal(ModActionModal(self.action, self.target, self.ctx))
+        elif self.action == "unban":
+            await interaction.response.send_modal(UnbanModal(self.ctx))
+        elif self.action == "edit perms":
+            await interaction.response.send_modal(PermsModal(self.ctx))
+        else:
+            await interaction.response.defer()
+            await self.execute_direct(interaction)
+
+    async def execute_direct(self, interaction: discord.Interaction):
+        act, ctx, t = self.action, self.ctx, self.target
+        try:
+            if act == "clear warnings":
+                warnings = load_json(WARNINGS_FILE, dict)
+                uid = str(t.id)
+                if uid in warnings:
+                    del warnings[uid]
+                    save_json(WARNINGS_FILE, warnings)
+                    await interaction.followup.send(f"wiped warnings for {t.mention}.", ephemeral=True)
+                else:
+                    await interaction.followup.send(f"{t.mention} is already clean.", ephemeral=True)
+                return
+
+            if act == "toggle honeypot":
+                if t.id in bot.honeypot_channels:
+                    bot.honeypot_channels.remove(t.id)
+                    save_honeypots(bot.honeypot_channels)
+                    await interaction.followup.send(f"killed honeypot in {t.mention}.", ephemeral=True)
+                else:
+                    bot.honeypot_channels.append(t.id)
+                    save_honeypots(bot.honeypot_channels)
+                    await interaction.followup.send(f"dropped honeypot in {t.mention}.", ephemeral=True)
+                return
+
+            cmd_map = {"annihilate": "annihilate", "unmute": "untimeout", "forceunmute": "forceunmute", "add whitelist": "whitelist", "remove whitelist": "unwhitelist", "lock channel": "lock", "unlock channel": "unlock"}
+            if act in cmd_map:
+                cmd = bot.get_command(cmd_map[act])
+                if await cmd.can_run(ctx):
+                    kw = {"channel": t} if act in ["lock channel", "unlock channel"] else {"member": t}
+                    await ctx.invoke(cmd, **kw)
+                    await interaction.followup.send(f"ran {act}.", ephemeral=True)
+                return
+
+            if act == "add priority":
+                cmd = bot.get_command("priority").get_command("whitelist")
+                if await cmd.can_run(ctx): await ctx.invoke(cmd, member=t)
+                await interaction.followup.send("priority whitelisted.", ephemeral=True)
+            elif act == "remove priority":
+                cmd = bot.get_command("priority").get_command("unwhitelist")
+                if await cmd.can_run(ctx): await ctx.invoke(cmd, member=t)
+                await interaction.followup.send("removed priority whitelist.", ephemeral=True)
+            elif act == "uwulock user":
+                cmd = bot.get_command("uwulock")
+                if await cmd.can_run(ctx): await ctx.invoke(cmd, arg1="lock", arg2=str(t.id))
+                await interaction.followup.send("uwulocked them.", ephemeral=True)
+            elif act == "uwulock server":
+                cmd = bot.get_command("uwulock")
+                if await cmd.can_run(ctx): await ctx.invoke(cmd, arg1="lock", arg2="everyone")
+                await interaction.followup.send("uwulocked the whole server.", ephemeral=True)
+            elif act == "uwu unlock server":
+                cmd = bot.get_command("uwulock")
+                if await cmd.can_run(ctx): await ctx.invoke(cmd, arg1="unlock", arg2="everyone")
+                await interaction.followup.send("freed the server from uwu.", ephemeral=True)
+
+        except DynamicRateLimitError as e: await interaction.followup.send(e.message, ephemeral=True)
+        except commands.CheckFailure: await interaction.followup.send("you lack perms for this.", ephemeral=True)
+        except Exception as e: await interaction.followup.send(f"broken: {e}", ephemeral=True)
+
 # ==========================================
 # 2. BOT CLASS
 # ==========================================
@@ -278,11 +511,6 @@ def is_priority_whitelisted(guild_id, user_id):
     pwl_data = load_json(PRIORITY_WHITELIST_FILE, dict)
     return str(user_id) in pwl_data.get(str(guild_id), [])
 
-class DynamicRateLimitError(commands.CheckFailure):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
-
 @bot.check
 async def global_dynamic_cooldown(ctx):
     if await is_mod_owner(ctx): return True
@@ -327,11 +555,9 @@ async def on_message(message):
         return
 
     # --- MINI AUTO MOD ---
-    # Regex catches: nigga, nigger, niggah, niggar, niggas, niggers
     slur_pattern = r'\bnigg[ae]r?h?s?\b'
     
     if re.search(slur_pattern, message.content.lower()):
-        # 1. Check Immunity (Server Owner, Bot Owner, or Whitelist)
         is_immune = False
         if message.guild:
             if message.author == message.guild.owner or await bot.is_owner(message.author):
@@ -340,12 +566,10 @@ async def on_message(message):
                 is_immune = True
         
         if not is_immune:
-            # 2. Handle Moderators (Administrator or Moderate Members permission)
             if message.author.guild_permissions.administrator or message.author.guild_permissions.moderate_members:
                 user_id = str(message.author.id)
                 now = discord.utils.utcnow().timestamp()
                 
-                # Check if they were warned in the last 5 minutes (300 seconds)
                 if user_id in mod_slur_warnings and now - mod_slur_warnings[user_id] < 300:
                     try:
                         await message.author.timeout(discord.utils.utcnow() + timedelta(hours=1), reason="Repeated slur use as staff")
@@ -355,23 +579,18 @@ async def on_message(message):
                     except discord.Forbidden:
                         await message.channel.send("tried to mute the mod but i don't have perms.")
                 else:
-                    # First warning for staff
                     mod_slur_warnings[user_id] = now
                     await message.channel.send(f"language buddy, {message.author.mention} you're getting muted next time you say it.")
             
-            # 3. Handle Regular Users
             else:
                 try:
-                    # Delete message first
                     await message.delete()
-                    # Apply 1 hour timeout
                     await message.author.timeout(discord.utils.utcnow() + timedelta(hours=1), reason="Slur use (Auto-Mod)")
                     await message.channel.send(f"{message.author.mention} got muted for an hour for that. chill.")
                     await send_log(message.guild, "Auto-Mod Mute", f"**User:** {message.author.mention}\n**Reason:** Slur usage", discord.Color.orange())
                 except discord.Forbidden:
                     await message.channel.send(f"tried to mute {message.author.mention} but i don't have permissions.")
-            
-            return # Stop processing other checks if a slur was found
+            return 
 
     # --- HONEYPOT ---
     if message.channel.id in bot.honeypot_channels:
@@ -422,6 +641,16 @@ async def on_ready():
 # ==========================================
 # 5. COMMANDS
 # ==========================================
+
+@bot.command()
+@check_perms("modview", moderate_members=True)
+async def modview(ctx):
+    embed = discord.Embed(
+        title="mod control panel",
+        description="select what you want to manage from the menus below.",
+        color=0x2b2d31 
+    )
+    await ctx.send(embed=embed, view=ModView(ctx))
 
 @bot.group(invoke_without_command=True)
 async def priority(ctx):
