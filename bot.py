@@ -1411,14 +1411,14 @@ YTDL_OPTIONS = {
     'logtostderr': False,
     'quiet': True,
     'no_warnings': True,
-    'default_search': 'scsearch', # Defaults to SoundCloud for text searches (Bypasses YT blocks)
+    'default_search': 'scsearch',
     'source_address': '0.0.0.0',
-    # Open-Source trick: Spoofs an iOS/Safari device to bypass YouTube's "Sign in" block for direct links
+    # NEW: This reads your YouTube login cookies, completely destroying the "Sign in" block!
+    'cookiefile': 'cookies.txt',
     'extractor_args': {
         'youtube': ['player_client=ios,web_safari'] 
     }
 }
-
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn',
