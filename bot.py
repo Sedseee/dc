@@ -1384,6 +1384,185 @@ async def umarizz(ctx, member: discord.Member = None):
         
     await ctx.send(f"{member.mention} {pickup_line}")
 
+
+# ==========================================
+# MUSIC SYSTEM SETUP
+# ==========================================
+
+import yt_dlp
+
+music_queues = {} # Stores queues per guild
+YTDL_OPTIONS = {
+    'format': 'bestaudio/best',
+    'extractaudio': True,
+    'audioformat': 'mp3',
+    'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
+    'restrictfilenames': True,
+    'noplaylist': True,
+    'nocheckcertificate': True,
+    'ignoreerrors': False,
+    'logtostderr': False,
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'ytsearch',
+    'source_address': '0.0.0.0',
+}
+
+FFMPEG_OPTIONS = {
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+    'options': '-vn',
+}
+
+ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
+
+def play_next(ctx):
+    """Function to play the next song in the queue recursively."""
+    guild_id = ctx.guild.id
+    if guild_id in music_queues and len(music_queues[guild_id]) > 0:
+        song = music_queues[guild_id].pop(0)
+        source = discord.FFmpegPCMAudio(song['url'], **FFMPEG_OPTIONS)
+        
+        if ctx.voice_client:
+            ctx.voice_client.play(source, after=lambda e: play_next(ctx))
+            bot.loop.create_task(ctx.send(f"🎵 Now playing: **{song['title']}**"))
+    else:
+        if ctx.voice_client and ctx.voice_client.is_connected():
+            bot.loop.create_task(ctx.send("Queue is empty. Add more songs to keep the party going!"))
+
+@bot.command()
+async def join(ctx):
+    if ctx.author.voice:
+        channel = ctx.author.voice.channel
+        if ctx.voice_client:
+            await ctx.voice_client.move_to(channel)
+        else:
+            await channel.connect()
+        await ctx.send(f"Joined {channel.mention}!")
+    else:
+        await ctx.send("You need to be in a voice channel first!")
+
+@bot.command()
+async def play(ctx, *, query: str):
+    if not ctx.author.voice:
+        return await ctx.send("You need to be in a voice channel first!")
+    
+    # Auto-join if not already in a VC
+    if not ctx.voice_client:
+        await ctx.author.voice.channel.connect()
+
+    msg = await ctx.send(f"🔍 Searching for `{query}`...")
+    
+    # Spotify workaround: Convert Spotify link to YouTube search query via scraping title
+    if "spotify.com" in query:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(query) as resp:
+                    text = await resp.text()
+                    match = re.search(r'<title>(.*?)</title>', text)
+                    if match:
+                        query = match.group(1).split(" | ")[0]
+        except Exception as e:
+            pass # Fallback to standard yt-dlp handling if scrape fails
+
+    is_url = query.startswith('http')
+    search_query = query if is_url else f"ytsearch:{query}"
+    
+    # Fetch data asynchronously
+    try:
+        data = await bot.loop.run_in_executor(None, lambda: ytdl.extract_info(search_query, download=False))
+    except Exception as e:
+        return await msg.edit(content=f"Error finding song. Please try again.")
+    
+    if 'entries' in data and len(data['entries']) > 0:
+        data = data['entries'][0]
+    elif 'entries' in data:
+        return await msg.edit(content="Couldn't find any results for that search.")
+        
+    song = {
+        'title': data.get('title'),
+        'url': data.get('url'),
+        'webpage_url': data.get('webpage_url', data.get('url'))
+    }
+    
+    guild_id = ctx.guild.id
+    if guild_id not in music_queues:
+        music_queues[guild_id] = []
+        
+    music_queues[guild_id].append(song)
+    
+    if not ctx.voice_client.is_playing() and not ctx.voice_client.is_paused():
+        await msg.edit(content="Song found! Starting playback.")
+        play_next(ctx)
+    else:
+        await msg.edit(content=f"Added to queue: **{song['title']}** (Position: {len(music_queues[guild_id])})")
+
+@bot.command()
+async def stop(ctx):
+    if ctx.voice_client:
+        guild_id = ctx.guild.id
+        if guild_id in music_queues:
+            music_queues[guild_id].clear()
+        ctx.voice_client.stop()
+        await ctx.voice_client.disconnect()
+        await ctx.send("Stopped the music, cleared the queue, and left the voice channel.")
+    else:
+        await ctx.send("I'm not in a voice channel.")
+
+@bot.command()
+async def queue(ctx):
+    guild_id = ctx.guild.id
+    if guild_id in music_queues and len(music_queues[guild_id]) > 0:
+        q = music_queues[guild_id]
+        queue_list = "\n".join([f"**{idx+1}.** {song['title']}" for idx, song in enumerate(q[:10])])
+        if len(q) > 10:
+            queue_list += f"\n*...and {len(q)-10} more.*"
+        
+        embed = discord.Embed(title="Current Music Queue", description=queue_list, color=discord.Color.blurple())
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send("The queue is currently empty.")
+
+@bot.command()
+async def pause(ctx):
+    if ctx.voice_client and ctx.voice_client.is_playing():
+        ctx.voice_client.pause()
+        await ctx.send("⏸️ Music paused.")
+    else:
+        await ctx.send("Nothing is playing right now.")
+
+@bot.command()
+async def resume(ctx):
+    if ctx.voice_client and ctx.voice_client.is_paused():
+        ctx.voice_client.resume()
+        await ctx.send("▶️ Music resumed.")
+    else:
+        await ctx.send("Music isn't paused or nothing is in the player.")
+
+@bot.command()
+async def remove(ctx, *, identifier: str):
+    guild_id = ctx.guild.id
+    if guild_id not in music_queues or len(music_queues[guild_id]) == 0:
+        return await ctx.send("The queue is empty.")
+        
+    q = music_queues[guild_id]
+    
+    # Check if identifier is a position number
+    if identifier.isdigit():
+        idx = int(identifier) - 1
+        if 0 <= idx < len(q):
+            removed = q.pop(idx)
+            return await ctx.send(f"Removed **{removed['title']}** from the queue.")
+        else:
+            return await ctx.send("Invalid position number in queue.")
+    
+    # Otherwise, search by song name
+    for idx, song in enumerate(q):
+        if identifier.lower() in song['title'].lower():
+            removed = q.pop(idx)
+            return await ctx.send(f"Removed **{removed['title']}** from the queue.")
+            
+    await ctx.send("Couldn't find that song in the queue.")
+
 # ==========================================
 # 6. RUN
 # ==========================================
