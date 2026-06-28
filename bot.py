@@ -1384,14 +1384,17 @@ async def umarizz(ctx, member: discord.Member = None):
         
     await ctx.send(f"{member.mention} {pickup_line}")
 
-
 # ==========================================
 # MUSIC SYSTEM SETUP
 # ==========================================
 
 import yt_dlp
+import imageio_ffmpeg
+import aiohttp
+import re
+import discord
 
-music_queues = {} # Stores queues per guild
+music_queues = {} 
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'extractaudio': True,
@@ -1420,7 +1423,11 @@ def play_next(ctx):
     guild_id = ctx.guild.id
     if guild_id in music_queues and len(music_queues[guild_id]) > 0:
         song = music_queues[guild_id].pop(0)
-        source = discord.FFmpegPCMAudio(song['url'], **FFMPEG_OPTIONS)
+        
+        # Uses the portable FFmpeg engine downloaded via requirements.txt
+        ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+        
+        source = discord.FFmpegPCMAudio(song['url'], executable=ffmpeg_path, **FFMPEG_OPTIONS)
         
         if ctx.voice_client:
             ctx.voice_client.play(source, after=lambda e: play_next(ctx))
@@ -1467,7 +1474,7 @@ async def play(ctx, *, query: str):
     is_url = query.startswith('http')
     search_query = query if is_url else f"ytsearch:{query}"
     
-    # Fetch data asynchronously
+    # Fetch data asynchronously to avoid freezing the bot
     try:
         data = await bot.loop.run_in_executor(None, lambda: ytdl.extract_info(search_query, download=False))
     except Exception as e:
