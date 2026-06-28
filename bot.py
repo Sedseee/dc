@@ -1402,10 +1402,10 @@ import re
 import random
 import discord
 import asyncio
+import traceback
 
 # --- THE OPUS ILLUSION HACK ---
-# Tricks discord.py into skipping the system libopus check.
-# FFmpeg will handle the Opus encoding directly instead!
+print("[DEBUG] Applying Opus Illusion Hack...")
 discord.opus.is_loaded = lambda: True
 discord.opus._load_default = lambda: True
 # ------------------------------
@@ -1426,7 +1426,7 @@ YTDL_OPTIONS = {
     'logtostderr': False,
     'quiet': True,
     'no_warnings': True,
-    'default_search': 'scsearch', # Forces all searches through SoundCloud
+    'default_search': 'scsearch', # Route to SoundCloud
     'source_address': '0.0.0.0'
 }
 
@@ -1437,17 +1437,20 @@ FFMPEG_OPTIONS = {
 
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
-async def play_next_async(ctx):
-    """Async function to play the next song and handle looping."""
+def play_next(ctx):
+    """Function to play the next song synchronously without probing."""
     guild_id = ctx.guild.id
+    print(f"[DEBUG] play_next triggered for guild: {guild_id}")
     
     last_song = current_song.get(guild_id)
     l_mode = loop_mode.get(guild_id, 0)
     
     if last_song:
         if l_mode == 1:
+            print("[DEBUG] Looping current song.")
             music_queues.setdefault(guild_id, []).insert(0, last_song)
         elif l_mode == 2:
+            print("[DEBUG] Looping queue (appending to end).")
             music_queues.setdefault(guild_id, []).append(last_song)
             
     current_song[guild_id] = None
@@ -1457,28 +1460,36 @@ async def play_next_async(ctx):
         current_song[guild_id] = song
         
         ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+        print(f"[DEBUG] Found FFmpeg at: {ffmpeg_path}")
+        print(f"[DEBUG] Playing stream URL: {song['url'][:80]}...")
         
-        # Uses FFmpegOpusAudio so the system doesn't need libopus!
-        source = await discord.FFmpegOpusAudio.from_probe(
-            song['url'], 
-            executable=ffmpeg_path, 
-            **FFMPEG_OPTIONS
-        )
-        
-        def after_playing(error):
-            # Schedules the next song in the bot's event loop
-            asyncio.run_coroutine_threadsafe(play_next_async(ctx), bot.loop)
+        try:
+            # FIX: We use FFmpegOpusAudio DIRECTLY instead of .from_probe()
+            # This skips the network check that was crashing your bot (Exit Status 8).
+            source = discord.FFmpegOpusAudio(
+                song['url'], 
+                executable=ffmpeg_path, 
+                **FFMPEG_OPTIONS
+            )
+            print("[DEBUG] Audio source created successfully!")
             
-        if ctx.voice_client:
-            ctx.voice_client.play(source, after=after_playing)
-            if l_mode != 1: 
-                bot.loop.create_task(ctx.send(f"🎵 Now playing: **{song['title']}**"))
+            if ctx.voice_client:
+                ctx.voice_client.play(source, after=lambda e: play_next(ctx))
+                if l_mode != 1: 
+                    bot.loop.create_task(ctx.send(f"🎵 Now playing: **{song['title']}**"))
+        except Exception as e:
+            print(f"[DEBUG ERROR] Failed to play audio source: {e}")
+            traceback.print_exc()
+            bot.loop.create_task(ctx.send("❌ Error playing the song. Skipping to next..."))
+            play_next(ctx) # Try next song if this one fails
     else:
+        print("[DEBUG] Queue is empty.")
         if ctx.voice_client and ctx.voice_client.is_connected():
             bot.loop.create_task(ctx.send("Queue is empty. Add more songs to keep the party going!"))
 
 @bot.command()
 async def join(ctx):
+    print(f"[DEBUG] !sedse join triggered by {ctx.author}")
     if ctx.author.voice:
         channel = ctx.author.voice.channel
         if ctx.voice_client:
@@ -1491,29 +1502,32 @@ async def join(ctx):
 
 @bot.command()
 async def play(ctx, *, query: str):
+    print(f"[DEBUG] !sedse play triggered with query: {query}")
     if not ctx.author.voice:
         return await ctx.send("You need to be in a voice channel first!")
     
     if not ctx.voice_client:
+        print("[DEBUG] Bot not in VC, auto-joining...")
         await ctx.author.voice.channel.connect()
 
-    # THE YOUTUBE INTERCEPTOR: Extracts title using YouTube's API to bypass blocks
     if "youtube.com" in query or "youtu.be" in query:
         msg = await ctx.send("🔗 YouTube link detected. Bypassing IP blocks...")
+        print("[DEBUG] YouTube link detected. Extracting title via oEmbed API...")
         try:
             yt_url = re.search(r'(https?://[^\s]+)', query).group(1)
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"https://www.youtube.com/oembed?url={yt_url}&format=json") as resp:
                     if resp.status == 200:
                         data = await resp.json()
-                        query = data['title'] # Converts URL to plain text for SoundCloud search
-        except Exception:
-            pass 
+                        query = data['title'] 
+                        print(f"[DEBUG] Successfully extracted title: {query}")
+        except Exception as e:
+            print(f"[DEBUG ERROR] YouTube oEmbed extraction failed: {e}") 
     else:
         msg = await ctx.send(f"🔍 Searching for `{query}`...")
     
-    # THE SPOTIFY INTERCEPTOR
     if "spotify.com" in query:
+        print("[DEBUG] Spotify link detected. Scraping title...")
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(query) as resp:
@@ -1521,15 +1535,19 @@ async def play(ctx, *, query: str):
                     match = re.search(r'<title>(.*?)</title>', text)
                     if match:
                         query = match.group(1).split(" | ")[0]
-        except Exception:
-            pass 
+                        print(f"[DEBUG] Spotify title extracted: {query}")
+        except Exception as e:
+            print(f"[DEBUG ERROR] Spotify extraction failed: {e}")
 
     is_url = query.startswith('http')
     search_query = query if is_url else f"scsearch:{query}"
+    print(f"[DEBUG] Sending to yt-dlp: {search_query}")
     
     try:
         data = await bot.loop.run_in_executor(None, lambda: ytdl.extract_info(search_query, download=False))
-    except Exception:
+        print("[DEBUG] yt-dlp extraction successful.")
+    except Exception as e:
+        print(f"[DEBUG ERROR] yt-dlp failed: {e}")
         return await msg.edit(content=f"❌ Could not retrieve audio data. Try a different search.")
     
     if 'entries' in data and len(data['entries']) > 0:
@@ -1542,21 +1560,24 @@ async def play(ctx, *, query: str):
         'url': data.get('url'),
         'webpage_url': data.get('webpage_url', data.get('url'))
     }
+    print(f"[DEBUG] Prepared song data for: {song['title']}")
     
     guild_id = ctx.guild.id
     if guild_id not in music_queues:
         music_queues[guild_id] = []
         
     music_queues[guild_id].append(song)
+    print(f"[DEBUG] Appended to queue. Current queue length: {len(music_queues[guild_id])}")
     
     if not ctx.voice_client.is_playing() and not ctx.voice_client.is_paused():
         await msg.edit(content="Song found! Starting playback.")
-        await play_next_async(ctx)
+        play_next(ctx)
     else:
         await msg.edit(content=f"Added to queue: **{song['title']}** (Position: {len(music_queues[guild_id])})")
 
 @bot.command()
 async def skip(ctx):
+    print(f"[DEBUG] !sedse skip triggered.")
     if ctx.voice_client and ctx.voice_client.is_playing():
         ctx.voice_client.stop()
         await ctx.send("⏭️ Skipped.")
@@ -1567,9 +1588,9 @@ async def skip(ctx):
 async def loop(ctx):
     guild_id = ctx.guild.id
     current_mode = loop_mode.get(guild_id, 0)
-    
     new_mode = (current_mode + 1) % 3
     loop_mode[guild_id] = new_mode
+    print(f"[DEBUG] Loop mode changed to {new_mode}")
     
     if new_mode == 0:
         await ctx.send("🔁 Looping is now **OFF**.")
@@ -1583,6 +1604,7 @@ async def shuffle(ctx):
     guild_id = ctx.guild.id
     if guild_id in music_queues and len(music_queues[guild_id]) > 1:
         random.shuffle(music_queues[guild_id])
+        print("[DEBUG] Queue shuffled.")
         await ctx.send("🔀 Queue has been shuffled!")
     else:
         await ctx.send("Not enough songs in the queue to shuffle.")
@@ -1602,12 +1624,14 @@ async def clear(ctx):
     guild_id = ctx.guild.id
     if guild_id in music_queues:
         music_queues[guild_id].clear()
+        print("[DEBUG] Queue cleared.")
         await ctx.send("🗑️ Cleared the queue.")
     else:
         await ctx.send("The queue is already empty.")
 
 @bot.command()
 async def stop(ctx):
+    print("[DEBUG] !sedse stop triggered.")
     if ctx.voice_client:
         guild_id = ctx.guild.id
         if guild_id in music_queues:
@@ -1639,6 +1663,7 @@ async def queue(ctx):
 async def pause(ctx):
     if ctx.voice_client and ctx.voice_client.is_playing():
         ctx.voice_client.pause()
+        print("[DEBUG] Playback paused.")
         await ctx.send("⏸️ Music paused.")
     else:
         await ctx.send("Nothing is playing right now.")
@@ -1647,6 +1672,7 @@ async def pause(ctx):
 async def resume(ctx):
     if ctx.voice_client and ctx.voice_client.is_paused():
         ctx.voice_client.resume()
+        print("[DEBUG] Playback resumed.")
         await ctx.send("▶️ Music resumed.")
     else:
         await ctx.send("Music isn't paused or nothing is in the player.")
@@ -1663,6 +1689,7 @@ async def remove(ctx, *, identifier: str):
         idx = int(identifier) - 1
         if 0 <= idx < len(q):
             removed = q.pop(idx)
+            print(f"[DEBUG] Removed song via index: {removed['title']}")
             return await ctx.send(f"Removed **{removed['title']}** from the queue.")
         else:
             return await ctx.send("Invalid position number in queue.")
@@ -1670,10 +1697,10 @@ async def remove(ctx, *, identifier: str):
     for idx, song in enumerate(q):
         if identifier.lower() in song['title'].lower():
             removed = q.pop(idx)
+            print(f"[DEBUG] Removed song via name search: {removed['title']}")
             return await ctx.send(f"Removed **{removed['title']}** from the queue.")
             
     await ctx.send("Couldn't find that song in the queue.")
-
 # ==========================================
 # 6. RUN
 # ==========================================
