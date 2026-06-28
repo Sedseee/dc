@@ -540,6 +540,13 @@ class MyBot(commands.Bot):
 
 bot = MyBot()
 
+if not discord.opus.is_loaded():
+    try:
+        discord.opus.load_opus('libopus.so.0')
+    except Exception as e:
+        print(f"Failed to load opus manually: {e}")
+
+
 # ==========================================
 # 3. HELPERS & SYSTEMS
 # ==========================================
@@ -1413,11 +1420,7 @@ YTDL_OPTIONS = {
     'no_warnings': True,
     'default_search': 'scsearch',
     'source_address': '0.0.0.0',
-    # NEW: This reads your YouTube login cookies, completely destroying the "Sign in" block!
-    'cookiefile': 'cookies.txt',
-    'extractor_args': {
-        'youtube': ['player_client=ios,web_safari'] 
-    }
+    'cookiefile': 'cookies.txt' # Keeps the cookies, removes the iOS spoof!
 }
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
