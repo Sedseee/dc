@@ -1392,9 +1392,13 @@ import yt_dlp
 import imageio_ffmpeg
 import aiohttp
 import re
+import random
 import discord
 
-music_queues = {} 
+music_queues = {}
+current_song = {}
+loop_mode = {} # 0: Off, 1: Loop Song, 2: Loop Queue
+
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'extractaudio': True,
@@ -1407,8 +1411,12 @@ YTDL_OPTIONS = {
     'logtostderr': False,
     'quiet': True,
     'no_warnings': True,
-    'default_search': 'ytsearch',
+    'default_search': 'scsearch', # Defaults to SoundCloud for text searches (Bypasses YT blocks)
     'source_address': '0.0.0.0',
+    # Open-Source trick: Spoofs an iOS/Safari device to bypass YouTube's "Sign in" block for direct links
+    'extractor_args': {
+        'youtube': ['player_client=ios,web_safari'] 
+    }
 }
 
 FFMPEG_OPTIONS = {
@@ -1419,19 +1427,38 @@ FFMPEG_OPTIONS = {
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
 def play_next(ctx):
-    """Function to play the next song in the queue recursively."""
+    """Function to play the next song and handle looping."""
     guild_id = ctx.guild.id
+    
+    # Check loop mode and re-insert the last song if needed
+    last_song = current_song.get(guild_id)
+    l_mode = loop_mode.get(guild_id, 0)
+    
+    if last_song:
+        if l_mode == 1:
+            # Loop Song: Insert back to the front
+            music_queues.setdefault(guild_id, []).insert(0, last_song)
+        elif l_mode == 2:
+            # Loop Queue: Append to the end
+            music_queues.setdefault(guild_id, []).append(last_song)
+            
+    current_song[guild_id] = None
+
     if guild_id in music_queues and len(music_queues[guild_id]) > 0:
         song = music_queues[guild_id].pop(0)
+        current_song[guild_id] = song
         
-        # Uses the portable FFmpeg engine downloaded via requirements.txt
         ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
-        
         source = discord.FFmpegPCMAudio(song['url'], executable=ffmpeg_path, **FFMPEG_OPTIONS)
         
+        # Open-source bots use VolumeTransformer to allow dynamic volume changes
+        volume_adjusted = discord.PCMVolumeTransformer(source, volume=1.0)
+        song['source'] = volume_adjusted 
+        
         if ctx.voice_client:
-            ctx.voice_client.play(source, after=lambda e: play_next(ctx))
-            bot.loop.create_task(ctx.send(f"🎵 Now playing: **{song['title']}**"))
+            ctx.voice_client.play(volume_adjusted, after=lambda e: play_next(ctx))
+            if l_mode != 1: # Don't spam the chat if a single song is on repeat
+                bot.loop.create_task(ctx.send(f"🎵 Now playing: **{song['title']}**"))
     else:
         if ctx.voice_client and ctx.voice_client.is_connected():
             bot.loop.create_task(ctx.send("Queue is empty. Add more songs to keep the party going!"))
@@ -1453,13 +1480,12 @@ async def play(ctx, *, query: str):
     if not ctx.author.voice:
         return await ctx.send("You need to be in a voice channel first!")
     
-    # Auto-join if not already in a VC
     if not ctx.voice_client:
         await ctx.author.voice.channel.connect()
 
     msg = await ctx.send(f"🔍 Searching for `{query}`...")
     
-    # Spotify workaround: Convert Spotify link to YouTube search query via scraping title
+    # Spotify workaround
     if "spotify.com" in query:
         try:
             async with aiohttp.ClientSession() as session:
@@ -1468,17 +1494,16 @@ async def play(ctx, *, query: str):
                     match = re.search(r'<title>(.*?)</title>', text)
                     if match:
                         query = match.group(1).split(" | ")[0]
-        except Exception as e:
-            pass # Fallback to standard yt-dlp handling if scrape fails
+        except Exception:
+            pass 
 
     is_url = query.startswith('http')
-    search_query = query if is_url else f"ytsearch:{query}"
+    search_query = query if is_url else f"scsearch:{query}"
     
-    # Fetch data asynchronously to avoid freezing the bot
     try:
         data = await bot.loop.run_in_executor(None, lambda: ytdl.extract_info(search_query, download=False))
-    except Exception as e:
-        return await msg.edit(content=f"Error finding song. Please try again.")
+    except Exception:
+        return await msg.edit(content=f"❌ Blocked by provider or invalid link. Try searching the song by name instead!")
     
     if 'entries' in data and len(data['entries']) > 0:
         data = data['entries'][0]
@@ -1504,11 +1529,80 @@ async def play(ctx, *, query: str):
         await msg.edit(content=f"Added to queue: **{song['title']}** (Position: {len(music_queues[guild_id])})")
 
 @bot.command()
+async def skip(ctx):
+    if ctx.voice_client and ctx.voice_client.is_playing():
+        # Skipping is as simple as stopping the current audio, which triggers the 'after' callback -> play_next()
+        ctx.voice_client.stop()
+        await ctx.send("⏭️ Skipped.")
+    else:
+        await ctx.send("Nothing is playing right now.")
+
+@bot.command()
+async def loop(ctx):
+    guild_id = ctx.guild.id
+    current_mode = loop_mode.get(guild_id, 0)
+    
+    # Cycle through: 0 (Off) -> 1 (Song) -> 2 (Queue)
+    new_mode = (current_mode + 1) % 3
+    loop_mode[guild_id] = new_mode
+    
+    if new_mode == 0:
+        await ctx.send("🔁 Looping is now **OFF**.")
+    elif new_mode == 1:
+        await ctx.send("🔂 Looping **CURRENT SONG**.")
+    elif new_mode == 2:
+        await ctx.send("🔁 Looping **ENTIRE QUEUE**.")
+
+@bot.command()
+async def shuffle(ctx):
+    guild_id = ctx.guild.id
+    if guild_id in music_queues and len(music_queues[guild_id]) > 1:
+        random.shuffle(music_queues[guild_id])
+        await ctx.send("🔀 Queue has been shuffled!")
+    else:
+        await ctx.send("Not enough songs in the queue to shuffle.")
+
+@bot.command(aliases=["nowplaying"])
+async def np(ctx):
+    guild_id = ctx.guild.id
+    song = current_song.get(guild_id)
+    if song:
+        embed = discord.Embed(title="Now Playing 🎵", description=f"**[{song['title']}]({song['webpage_url']})**", color=discord.Color.green())
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send("Nothing is currently playing.")
+
+@bot.command()
+async def volume(ctx, vol: int):
+    if 1 <= vol <= 100:
+        guild_id = ctx.guild.id
+        song = current_song.get(guild_id)
+        if ctx.voice_client and ctx.voice_client.is_playing() and song and 'source' in song:
+            song['source'].volume = vol / 100
+            await ctx.send(f"🔊 Volume set to **{vol}%**")
+        else:
+            await ctx.send("Nothing is playing to change the volume of.")
+    else:
+        await ctx.send("Please choose a volume between 1 and 100.")
+
+@bot.command()
+async def clear(ctx):
+    guild_id = ctx.guild.id
+    if guild_id in music_queues:
+        music_queues[guild_id].clear()
+        await ctx.send("🗑️ Cleared the queue.")
+    else:
+        await ctx.send("The queue is already empty.")
+
+@bot.command()
 async def stop(ctx):
     if ctx.voice_client:
         guild_id = ctx.guild.id
         if guild_id in music_queues:
             music_queues[guild_id].clear()
+        if guild_id in current_song:
+            current_song[guild_id] = None
+        loop_mode[guild_id] = 0
         ctx.voice_client.stop()
         await ctx.voice_client.disconnect()
         await ctx.send("Stopped the music, cleared the queue, and left the voice channel.")
@@ -1553,7 +1647,6 @@ async def remove(ctx, *, identifier: str):
         
     q = music_queues[guild_id]
     
-    # Check if identifier is a position number
     if identifier.isdigit():
         idx = int(identifier) - 1
         if 0 <= idx < len(q):
@@ -1562,14 +1655,12 @@ async def remove(ctx, *, identifier: str):
         else:
             return await ctx.send("Invalid position number in queue.")
     
-    # Otherwise, search by song name
     for idx, song in enumerate(q):
         if identifier.lower() in song['title'].lower():
             removed = q.pop(idx)
             return await ctx.send(f"Removed **{removed['title']}** from the queue.")
             
     await ctx.send("Couldn't find that song in the queue.")
-
 # ==========================================
 # 6. RUN
 # ==========================================
