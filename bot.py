@@ -429,29 +429,34 @@ async def connect_nodes(client: commands.Bot):
     """Connect to FREE Public Lavalink Nodes."""
     print("[MUSIC] Attempting to connect to Lavalink...")
     
-    # Updated list of active, reliable free nodes.
-    # Wavelink will automatically use the first one that connects successfully.
+    # A robust list of the most active free Lavalink nodes.
+    # Wavelink will automatically try all of them and use the first one that connects.
     nodes = [
+        wavelink.Node(
+            uri="https://lavalink.devamop.in:443", 
+            password="DevamOP"
+        ),
         wavelink.Node(
             uri="http://lavalink.jirayu.net:13592", 
             password="youshallnotpass"
         ),
         wavelink.Node(
-            uri="http://89.106.84.59:4000", 
-            password="heavencloud.in"
+            uri="https://lava.link:443", 
+            password="I'm a secret"
         ),
         wavelink.Node(
-            uri="https://lavalink.devamop.in:443", 
-            password="DevamOP"
+            uri="http://node.triniumhost.com:2333", 
+            password="youshallnotpass"
         )
     ]
     
     try:
+        # We tell Wavelink to connect to the pool
         await wavelink.Pool.connect(client=client, nodes=nodes)
         print("[MUSIC] Connected to a Public Lavalink Node successfully!")
     except Exception as e:
-        print(f"[MUSIC ERROR] Failed to connect to Lavalink Nodes: {e}")
-
+        print(f"[MUSIC ERROR] Failed to connect to any Lavalink Nodes: {e}")
+        print("[MUSIC ERROR] All public nodes might be currently full or offline.")
 # ==========================================
 # 3. BOT CLASS
 # ==========================================
