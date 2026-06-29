@@ -11,7 +11,6 @@ from datetime import timedelta
 from typing import Union
 from discord.ext import commands
 from discord import app_commands
-import wavelink
 
 # ==========================================
 # 0. DATABASE & CACHE SETUP
@@ -29,13 +28,109 @@ WHITELIST_FILE = "whitelist.json"
 PRIORITY_WHITELIST_FILE = "priority_whitelist.json"
 UMARIZZ_FILE = "umarizz.json"
 
-# Auto-generate umarizz.json if it's missing
+# Auto-generate umarizz.json if it's missing (with the fixed syntax)
 UMARIZZ_DEFAULT_DATA = {
   "umamusume_pickup_lines": [
-    {"id": 1, "category": "The Trainer's Menu", "line": "Are you a Trainer? Because my heart starts racing the moment you're around."},
-    {"id": 2, "category": "The Trainer's Menu", "line": "Are you the URA Finals? Because you're my ultimate goal."},
+    {"id": 1, "category": "The Trainer's Menu (General Lines)", "line": "Are you a Trainer? Because my heart starts racing the moment you're around."},
+    {"id": 2, "category": "The Trainer's Menu (General Lines)", "line": "Are you the URA Finals? Because you're my ultimate goal."},
+    {"id": 3, "category": "The Trainer's Menu (General Lines)", "line": "My stamina might be at an E, but my love for you is always S+."},
+    {"id": 4, "category": "The Trainer's Menu (General Lines)", "line": "Forget the training menuâ€”my only plan today is spending time with you."},
+    {"id": 5, "category": "The Trainer's Menu (General Lines)", "line": "Are you a rainbow gate? Because seeing you guarantees it's going to be a good day."},
+    {"id": 6, "category": "The Trainer's Menu (General Lines)", "line": "I must have maxed out my wisdom stat, because choosing you was the smartest thing I've ever done."},
+    {"id": 7, "category": "The Trainer's Menu (General Lines)", "line": "Are you an alarm clock? Because you just gave me a second chance at love."},
+    {"id": 8, "category": "The Trainer's Menu (General Lines)", "line": "My motivation just went from \"Hopeless\" to \"Perfect\" the second you walked in."},
+    {"id": 9, "category": "The Trainer's Menu (General Lines)", "line": "I don't need a high-speed summer training camp if I can just spend the season with you."},
+    {"id": 10, "category": "The Trainer's Menu (General Lines)", "line": "You must be an Inherited Factor, because youâ€™ve completely changed my traits for the better."},
     {"id": 11, "category": "Character-Specific Charmers", "line": "Are you Special Week? Because you're the best in Japan in my eyes."},
-    {"id": 13, "category": "Character-Specific Charmers", "line": "Call me Gold Ship, because I'm ready to drop-kick my way directly into your heart."}
+    {"id": 12, "category": "Character-Specific Charmers", "line": "Are you Silence Suzuka? Because you took my breath away on the very first turn."},
+    {"id": 13, "category": "Character-Specific Charmers", "line": "Call me Gold Ship, because I'm ready to drop-kick my way directly into your heart."},
+    {"id": 14, "category": "Character-Specific Charmers", "line": "Are you Tokai Teio? Because youâ€™ve got me skipping with joy."},
+    {"id": 15, "category": "Character-Specific Charmers", "line": "Are you Oguri Cap? Because my hunger for your love is absolutely insatiable."},
+    {"id": 16, "category": "Character-Specific Charmers", "line": "Are you Rice Shower? Because youâ€™ve blessed my life, no matter what anyone else says."},
+    {"id": 17, "category": "Character-Specific Charmers", "line": "Are you Mejiro McQueen? Because youâ€™ve got elegance written all over youâ€”let me buy you some sweets."},
+    {"id": 18, "category": "Character-Specific Charmers", "line": "Are you Twin Turbo? Because Iâ€™m going all-out from the very start with you."},
+    {"id": 19, "category": "Character-Specific Charmers", "line": "Are you Mihono Bourbon? Because my heart is programmed to love only you."},
+    {"id": 20, "category": "Character-Specific Charmers", "line": "Are you Daiwa Scarlet? Because youâ€™ll always be number one to me."},
+    {"id": 21, "category": "Character-Specific Charmers", "line": "Are you Vodka? Because youâ€™re absolutely intoxicating."},
+    {"id": 22, "category": "Character-Specific Charmers", "line": "Are you Gold City? Because you look like a literal runway model."},
+    {"id": 23, "category": "Character-Specific Charmers", "line": "Are you Agnes Tachyon? Because the chemistry between us is undeniable."},
+    {"id": 24, "category": "Character-Specific Charmers", "line": "Are you Manhattan Cafe? Because you're brewing up a lot of deep feelings in me."},
+    {"id": 25, "category": "Character-Specific Charmers", "line": "Are you El Condor Pasa? Because our love is burning like a fiery luchador."},
+    {"id": 26, "category": "Character-Specific Charmers", "line": "Are you Grass Wonder? Because you look calm, but you've completely conquered my heart."},
+    {"id": 27, "category": "Character-Specific Charmers", "line": "Are you King Halo? Because you deserve a royal place in my life."},
+    {"id": 28, "category": "Character-Specific Charmers", "line": "Are you Nice Nature? Because even if you think you're third place, you're always first to me."},
+    {"id": 29, "category": "Character-Specific Charmers", "line": "Are you Symboli Rudolf? Because youâ€™re the absolute Emperor of my heart."},
+    {"id": 30, "category": "Character-Specific Charmers", "line": "Are you Maruzensky? Because you're super-car fast at stealing my feelings."},
+    {"id": 31, "category": "Character-Specific Charmers", "line": "Are you Mayano Top Gun? Because you've got me flying high in the clouds."},
+    {"id": 32, "category": "Character-Specific Charmers", "line": "Are you Super Creek? Because I could really use some of your pampering right now."},
+    {"id": 33, "category": "Character-Specific Charmers", "line": "Are you Tamamo Cross? Because you're a small package with a whole lot of impact."},
+    {"id": 34, "category": "Character-Specific Charmers", "line": "Are you Fine Motion? Because our connection feels like a royal decree."},
+    {"id": 35, "category": "Character-Specific Charmers", "line": "Are you Air Groove? Because you've got absolute control over my heart's climate."},
+    {"id": 36, "category": "Character-Specific Charmers", "line": "Are you Eishin Flash? Because everything with you is perfectly timed and precise."},
+    {"id": 37, "category": "Character-Specific Charmers", "line": "Are you Smart Falcon? Because you're the ultimate center idol of my world."},
+    {"id": 38, "category": "Character-Specific Charmers", "line": "Are you Curren Chan? Because youâ€™ve completely captured my feed and my heart."},
+    {"id": 39, "category": "Character-Specific Charmers", "line": "Are you Kitasan Black? Because you bring festival energy wherever you go."},
+    {"id": 40, "category": "Character-Specific Charmers", "line": "Are you Satono Diamond? Because you're a rare gem I want to cherish forever."},
+    {"id": 41, "category": "Track Conditions & Race Strategy", "line": "Are you a turf track? Because I'm falling for you smoothly."},
+    {"id": 42, "category": "Track Conditions & Race Strategy", "line": "Even if the track condition is \"Bad,\" my feelings for you are always \"Good.\""},
+    {"id": 43, "category": "Track Conditions & Race Strategy", "line": "Are you the final straight? Because Iâ€™m giving it everything I've got to catch up to you."},
+    {"id": 44, "category": "Track Conditions & Race Strategy", "line": "Forget the inner track, I want to take the long way around just to spend more time with you."},
+    {"id": 45, "category": "Track Conditions & Race Strategy", "line": "Are you the Arima Kinen? Because you're the grand finale I've been waiting for all year."},
+    {"id": 46, "category": "Track Conditions & Race Strategy", "line": "Are you the Japan Cup? Because youâ€™ve attracted international attention, but I only have eyes for you."},
+    {"id": 47, "category": "Track Conditions & Race Strategy", "line": "I'd run through a muddy dirt track just to see you smile."},
+    {"id": 48, "category": "Track Conditions & Race Strategy", "line": "Are you an uphill slope? Because you make my heart beat faster and harder."},
+    {"id": 49, "category": "Track Conditions & Race Strategy", "line": "Are you the starting gate? Because Iâ€™m ready to burst out and chase you down."},
+    {"id": 50, "category": "Track Conditions & Race Strategy", "line": "You must be a 2400m race, because I'm in this relationship for the long haul."},
+    {"id": 51, "category": "Skills & Stat Check", "line": "Did you just activate \"Maestro of the Corner\"? Because you smoothly navigated right into my heart."},
+    {"id": 52, "category": "Skills & Stat Check", "line": "You must have the \"Charisma\" skill, because I literally cannot look away."},
+    {"id": 53, "category": "Skills & Stat Check", "line": "My speed stat just broke the limit when you smiled at me."},
+    {"id": 54, "category": "Skills & Stat Check", "line": "Are you a unique skill? Because you're absolutely one of a kind."},
+    {"id": 55, "category": "Skills & Stat Check", "line": "I don't need \"Sprint Turbo\" to rush over to your side."},
+    {"id": 56, "category": "Skills & Stat Check", "line": "You must have \"Tailwind,\" because you're pushing me in all the right directions."},
+    {"id": 57, "category": "Skills & Stat Check", "line": "Are you a debuff skill? Because youâ€™ve completely paralyzed me with your looks."},
+    {"id": 58, "category": "Skills & Stat Check", "line": "Iâ€™ve got max stamina, but you still somehow leave me completely breathless."},
+    {"id": 59, "category": "Skills & Stat Check", "line": "Are you \"Guts\"? Because you give me the strength to keep going when things get tough."},
+    {"id": 60, "category": "Skills & Stat Check", "line": "Let's trigger a dynamic camera angle, because you look stunning from every single direction."},
+    {"id": 61, "category": "Winning Live & Idol Status", "line": "Are you the center position? Because you're the star of my show."},
+    {"id": 62, "category": "Winning Live & Idol Status", "line": "Iâ€™d win every G1 race on the calendar just to see you perform in the Winning Live."},
+    {"id": 63, "category": "Winning Live & Idol Status", "line": "Are you \"Make debut\"? Because this is the start of something beautiful."},
+    {"id": 64, "category": "Winning Live & Idol Status", "line": "My heart rate matches the beat of \"GIRLS' LEGEND U\" whenever you're near."},
+    {"id": 65, "category": "Winning Live & Idol Status", "line": "Are you a glow stick? Because you light up my entire world."},
+    {"id": 66, "category": "Winning Live & Idol Status", "line": "Forget the concert crowd, I'm only cheering for you."},
+    {"id": 67, "category": "Winning Live & Idol Status", "line": "Are you a Triple Crown? Because youâ€™re a rare achievement I'd love to win."},
+    {"id": 68, "category": "Winning Live & Idol Status", "line": "You don't need a microphone to make your voice the only thing I hear."},
+    {"id": 69, "category": "Winning Live & Idol Status", "line": "Let's duet on the center stage of my heart."},
+    {"id": 70, "category": "Winning Live & Idol Status", "line": "You're the encore I'll always ask for."},
+    {"id": 71, "category": "Items, Food & Fuel", "line": "Are you a giant carrot? Because you're exactly what I've been looking for."},
+    {"id": 72, "category": "Items, Food & Fuel", "line": "You're sweeter than a freshly baked Mejiro macaron."},
+    {"id": 73, "category": "Items, Food & Fuel", "line": "Are you a carrot burger? Because youâ€™re the perfect treat after a long, exhausting day."},
+    {"id": 74, "category": "Items, Food & Fuel", "line": "Iâ€™d share my very last carrot juice with you."},
+    {"id": 75, "category": "Items, Food & Fuel", "line": "Are you a lucky charm? Because my chances of success skyrocket when you're around."},
+    {"id": 76, "category": "Items, Food & Fuel", "line": "You must be a royal parfait, because you just maxed out my motivation levels."},
+    {"id": 77, "category": "Items, Food & Fuel", "line": "Forget the training weights, you're the only thing heavy on my mind."},
+    {"id": 78, "category": "Items, Food & Fuel", "line": "Are you a strategy playbook? Because I want to study your every move."},
+    {"id": 79, "category": "Items, Food & Fuel", "line": "You're like a high-grade energy drinkâ€”one look at you and I'm fully charged."},
+    {"id": 80, "category": "Items, Food & Fuel", "line": "Are you a secret stash of snacks? Because finding you made my whole week."},
+    {"id": 81, "category": "Playful Puns & Pacing", "line": "Are you a front-runner? Because you're way ahead of anyone else."},
+    {"id": 82, "category": "Playful Puns & Pacing", "line": "I might be a betweener, but Iâ€™m ready to make a definitive move on you."},
+    {"id": 83, "category": "Playful Puns & Pacing", "line": "Are you a chaser? Because you've been running through my mind all day long."},
+    {"id": 84, "category": "Playful Puns & Pacing", "line": "I promise I won't block your path; I just want to run right beside you."},
+    {"id": 85, "category": "Playful Puns & Pacing", "line": "Are you a photo finish? Because itâ€™s incredibly close, but you win every single time."},
+    {"id": 86, "category": "Playful Puns & Pacing", "line": "You must be Tazuna-san, because you always know exactly how to guide me back on track."},
+    {"id": 87, "category": "Playful Puns & Pacing", "line": "Are you President Akikawa? Because youâ€™ve got \"fan-favorite\" written all over you."},
+    {"id": 88, "category": "Playful Puns & Pacing", "line": "My love for you has a 100% success rateâ€”absolutely zero training failure risk here."},
+    {"id": 89, "category": "Playful Puns & Pacing", "line": "Are you the green light on the gate? Because you've got me ready to go."},
+    {"id": 90, "category": "Playful Puns & Pacing", "line": "I must be out of stamina, because I'm falling incredibly hard for you."},
+    {"id": 91, "category": "Playful Puns & Pacing", "line": "Are you a 5-star awakening? Because you've reached peak absolute perfection."},
+    {"id": 92, "category": "Playful Puns & Pacing", "line": "You don't need lucky horseshoes to leave a permanent impression on my heart."},
+    {"id": 93, "category": "Playful Puns & Pacing", "line": "Are you a critical hit in training? Because you just boosted my stats immensely."},
+    {"id": 94, "category": "Playful Puns & Pacing", "line": "Even if I get a bad status condition, you're the only cure I'll ever need."},
+    {"id": 95, "category": "Playful Puns & Pacing", "line": "Are you the URA trophy? Because I want to hold you high for everyone to see."},
+    {"id": 96, "category": "Playful Puns & Pacing", "line": "Youâ€™ve got me running at a record-breaking pace just to keep up with your beauty."},
+    {"id": 97, "category": "Playful Puns & Pacing", "line": "Are you a limited-time gacha banner? Because Iâ€™m willing to spend everything I have to get you."},
+    {"id": 98, "category": "Playful Puns & Pacing", "line": "My heart is doing a full sprint, and there's no deceleration in sight."},
+    {"id": 99, "category": "Playful Puns & Pacing", "line": "Are you a stable? Because I feel completely safe and at home with you."},
+    {"id": 100, "category": "Playful Puns & Pacing", "line": "Let's cross the finish line together, because you're my ultimate prize."}
   ]
 }
 
@@ -193,6 +288,8 @@ class OwnerBanConfirmView(discord.ui.View):
     async def just_mute(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.message.edit(content=f"ban shot down by {interaction.user.mention}. {self.target.mention} is just gonna stay muted.", view=None)
         self.stop()
+
+# --- MODVIEW UI CLASSES ---
 
 class UnbanModal(discord.ui.Modal, title='unban user'):
     user_id = discord.ui.TextInput(label='user id', placeholder='drop their discord id here', required=True)
@@ -420,40 +517,8 @@ class ModView(discord.ui.View):
         except commands.CheckFailure: await interaction.followup.send("you lack perms for this.", ephemeral=True)
         except Exception as e: await interaction.followup.send(f"broken: {e}", ephemeral=True)
 
-
 # ==========================================
-# 2. LAVALINK CONNECTION NODE LOGIC
-# ==========================================
-
-async def connect_nodes(client: commands.Bot):
-    """Connect to FREE Public Lavalink Nodes."""
-    print("[MUSIC] Attempting to connect to Lavalink...")
-    
-    # Updated list of active, reliable free nodes.
-    # Wavelink will automatically use the first one that connects successfully.
-    nodes = [
-        wavelink.Node(
-            uri="http://lavalink.jirayu.net:13592", 
-            password="youshallnotpass"
-        ),
-        wavelink.Node(
-            uri="http://89.106.84.59:4000", 
-            password="heavencloud.in"
-        ),
-        wavelink.Node(
-            uri="https://lavalink.devamop.in:443", 
-            password="DevamOP"
-        )
-    ]
-    
-    try:
-        await wavelink.Pool.connect(client=client, nodes=nodes)
-        print("[MUSIC] Connected to a Public Lavalink Node successfully!")
-    except Exception as e:
-        print(f"[MUSIC ERROR] Failed to connect to Lavalink Nodes: {e}")
-
-# ==========================================
-# 3. BOT CLASS
+# 2. BOT CLASS
 # ==========================================
 
 class MyBot(commands.Bot):
@@ -468,10 +533,6 @@ class MyBot(commands.Bot):
         self.add_view(JJSView())
         self.add_view(VerifyView())
         self.add_view(HoneypotView()) 
-        
-        # Connect to Wavelink/Lavalink nodes on startup
-        await connect_nodes(self)
-
         try:
             await self.tree.sync()
         except Exception as e:
@@ -479,12 +540,18 @@ class MyBot(commands.Bot):
 
 bot = MyBot()
 
+if not discord.opus.is_loaded():
+    try:
+        discord.opus.load_opus('libopus.so.0')
+    except Exception as e:
+        print(f"Failed to load opus manually: {e}")
+
 
 # ==========================================
-# 4. HELPERS & SYSTEMS
+# 3. HELPERS & SYSTEMS
 # ==========================================
 
-UWU_EMOJIS = ["(ᵘʷᵘ)", "(ᴜ‿ᴜ✿)", "~(˘▾˘~)", "UwU", "(˘³˘)", "owo", "( ｡ᵘ ᵕ ᵘ ｡)", "(◦ᵕ ˘ ᵕ◦)", "(⑅˘꒳˘)", "^w^", "(。U ω U。)"]
+UWU_EMOJIS = ["(áµ˜Ê·áµ˜)", "(á´œâ€¿á´œâœ¿)", "~(Ë˜â–¾Ë˜~)", "UwU", "(Ë˜Â³Ë˜)", "owo", "( ï½¡áµ˜ áµ• áµ˜ ï½¡)", "(â—¦áµ• Ë˜ áµ•â—¦)", "(â‘…Ë˜ê’³Ë˜)", "^w^", "(ã€‚U Ï‰ Uã€‚)"]
 
 def uwuify(text):
     text = text.replace('r', 'w').replace('l', 'w').replace('R', 'W').replace('L', 'W')
@@ -585,7 +652,7 @@ async def global_dynamic_cooldown(ctx):
     return True
 
 # ==========================================
-# 5. EVENTS
+# 4. EVENTS
 # ==========================================
 
 @bot.event
@@ -691,7 +758,7 @@ async def on_ready():
     print(f"bot logged in as {bot.user}")
 
 # ==========================================
-# 6. MODERATION & FUN COMMANDS
+# 5. COMMANDS
 # ==========================================
 
 @bot.command()
@@ -712,13 +779,18 @@ async def priority(ctx):
 async def whitelist(ctx, member: discord.Member = None):
     pwl_data = load_json(PRIORITY_WHITELIST_FILE, dict)
     gid = str(ctx.guild.id)
+
+    # If no member is mentioned, display the list
     if member is None:
         users = pwl_data.get(gid, [])
         if not users:
             return await ctx.send("the priority whitelist is currently empty.")
+        
         mentions = [f"<@{uid}>" for uid in users]
         embed = discord.Embed(title="priority whitelisted users", description="\n".join(mentions), color=discord.Color.gold())
         return await ctx.send(embed=embed)
+
+    # If a member is mentioned, add them to the whitelist
     if not await is_mod_owner(ctx): return await ctx.send("only sedse can mess with the priority whitelist, back off.")
     if gid not in pwl_data: pwl_data[gid] = []
     if str(member.id) not in pwl_data[gid]:
@@ -744,13 +816,18 @@ async def unwhitelist(ctx, member: discord.Member):
 async def whitelist(ctx, member: discord.Member = None):
     wl_data = load_json(WHITELIST_FILE, dict)
     gid = str(ctx.guild.id)
+    
+    # If no member is mentioned, display the list
     if member is None:
         users = wl_data.get(gid, [])
         if not users:
             return await ctx.send("the whitelist is currently empty.")
+            
         mentions = [f"<@{uid}>" for uid in users]
         embed = discord.Embed(title="whitelisted users", description="\n".join(mentions), color=discord.Color.green())
         return await ctx.send(embed=embed)
+
+    # If a member is mentioned, add them to the whitelist
     if not await is_mod_owner(ctx): return await ctx.send("only sedse can mess with the whitelist, back off.")
     if gid not in wl_data: wl_data[gid] = []
     if str(member.id) not in wl_data[gid]:
@@ -1267,6 +1344,7 @@ async def zalgo(ctx, *, text: str):
 async def rizz(ctx, member: discord.Member = None):
     if member is None:
         return await ctx.send("you gotta ping someone to rizz them up.")
+        
     fallback_lines = [
         "Are you a keyboard? Because you're just my type.",
         "Are you a parking ticket? Because you've got FINE written all over you.",
@@ -1275,9 +1353,12 @@ async def rizz(ctx, member: discord.Member = None):
         "Are you French? Because Eiffel for you.",
         "Is your name Google? Because you have everything I've been searching for."
     ]
+    
     pickup_line = random.choice(fallback_lines)
+    
     try:
         async with aiohttp.ClientSession() as session:
+            # Rizz API alternative endpoint
             async with session.get("https://rizzapi.vercel.app/random", timeout=5) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -1285,141 +1366,392 @@ async def rizz(ctx, member: discord.Member = None):
                         pickup_line = data["text"]
     except Exception as e:
         print(f"pickup line api failed: {e}")
+        
     await ctx.send(f"{member.mention} {pickup_line}")
 
 @bot.command()
 async def umarizz(ctx, member: discord.Member = None):
     if member is None:
         return await ctx.send("you gotta ping someone to umarizz them up.")
+        
     try:
         with open(UMARIZZ_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
+            
         lines = data.get("umamusume_pickup_lines", [])
         if not lines:
             raise ValueError("No pickup lines found in the file.")
+            
+        # Pick a random line
         pickup_line = random.choice(lines)["line"]
     except Exception as e:
         print(f"umarizz error: {e}")
+        # Ultimate fallback just in case the file gets deleted/corrupted
         pickup_line = "Are you a Trainer? Because my heart starts racing the moment you're around."
+        
     await ctx.send(f"{member.mention} {pickup_line}")
 
 # ==========================================
-# 7. NEW LAVALINK MUSIC SYSTEM
+# MUSIC SYSTEM SETUP
 # ==========================================
 
-@bot.event
-async def on_wavelink_track_end(payload: wavelink.TrackEndEventPayload):
-    """Automatically plays the next song in the queue when the current one finishes."""
-    player: wavelink.Player = payload.player
-    if not player:
+import yt_dlp
+import imageio_ffmpeg
+import traceback
+
+# --- THE OPUS ILLUSION HACK ---
+print("[DEBUG] Applying Opus Illusion Hack...")
+discord.opus.is_loaded = lambda: True
+discord.opus._load_default = lambda: True
+# ------------------------------
+
+music_queues = {}
+current_song = {}
+loop_mode = {}  # 0: Off, 1: Loop Song, 2: Loop Queue
+
+YTDL_OPTIONS = {
+    'format': 'bestaudio/best',
+    'extractaudio': True,
+    'audioformat': 'mp3',
+    'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
+    'restrictfilenames': True,
+    'noplaylist': True,
+    'nocheckcertificate': True,
+    'ignoreerrors': False,
+    'logtostderr': False,
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'scsearch',
+    'source_address': '0.0.0.0'
+}
+
+FFMPEG_OPTIONS = {
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+    'options': '-vn',
+}
+
+ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
+
+
+# ---- FIX: Split into sync wrapper + async worker ----
+
+def play_next(ctx, error=None):
+    """
+    Sync wrapper called by the voice client's `after` callback.
+    Schedules the async play_next_async on the bot's event loop safely.
+    """
+    if error:
+        print(f"[DEBUG] Playback error received: {error}")
+
+    # This is the CORRECT way to schedule a coroutine from a background thread.
+    future = asyncio.run_coroutine_threadsafe(play_next_async(ctx), bot.loop)
+    try:
+        future.result(timeout=30)  # Wait up to 30 seconds for it to complete
+    except Exception as e:
+        print(f"[DEBUG ERROR] play_next future failed: {e}")
+        traceback.print_exc()
+
+
+async def play_next_async(ctx):
+    """
+    Async worker that handles queue logic, audio source creation,
+    and sending messages to Discord.
+    """
+    guild_id = ctx.guild.id
+    print(f"[DEBUG] play_next_async triggered for guild: {guild_id}")
+
+    # --- Safety Check ---
+    if not ctx.voice_client or not ctx.voice_client.is_connected():
+        print("[DEBUG] Voice client is gone. Aborting play_next_async.")
+        current_song[guild_id] = None
         return
 
-    if not player.queue.is_empty:
-        next_track = player.queue.get()
-        await player.play(next_track)
-        
-        # Check if we have a home channel saved to send updates
-        if hasattr(player, "home"):
-            await player.home.send(f"🎵 Now playing: **{next_track.title}**")
-    else:
-        if hasattr(player, "home"):
-            await player.home.send("✅ Queue is empty, party is over!")
+    last_song = current_song.get(guild_id)
+    l_mode = loop_mode.get(guild_id, 0)
+
+    # Handle loop modes BEFORE popping the next song
+    if last_song:
+        if l_mode == 1:
+            print("[DEBUG] Loop Song: re-inserting current song at front.")
+            music_queues.setdefault(guild_id, []).insert(0, last_song)
+        elif l_mode == 2:
+            print("[DEBUG] Loop Queue: appending current song to end.")
+            music_queues.setdefault(guild_id, []).append(last_song)
+
+    current_song[guild_id] = None
+
+    # Check if there's anything in the queue
+    if not music_queues.get(guild_id):
+        print("[DEBUG] Queue is empty. Nothing left to play.")
+        await ctx.send("âœ… Queue is empty. Add more songs to keep the party going!")
+        return
+
+    song = music_queues[guild_id].pop(0)
+    current_song[guild_id] = song
+
+    ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+    print(f"[DEBUG] Found FFmpeg at: {ffmpeg_path}")
+    print(f"[DEBUG] Playing stream URL: {song['url'][:80]}...")
+
+    try:
+        source = discord.FFmpegOpusAudio(
+            song['url'],
+            executable=ffmpeg_path,
+            **FFMPEG_OPTIONS
+        )
+        print("[DEBUG] Audio source created successfully.")
+
+        # Final check before playing
+        if ctx.voice_client and ctx.voice_client.is_connected():
+            # Pass the SYNC wrapper as `after` â€” this is correct
+            ctx.voice_client.play(source, after=lambda e: play_next(ctx, e))
+
+            if l_mode != 1:
+                await ctx.send(f"ðŸŽµ Now playing: **{song['title']}**")
+        else:
+            print("[DEBUG] Voice client disconnected right before play. Aborting.")
+
+    except Exception as e:
+        print(f"[DEBUG ERROR] Failed to create/play audio source: {e}")
+        traceback.print_exc()
+        await ctx.send(f"âŒ Error playing **{song['title']}**. Skipping...")
+        # Directly await the next song instead of calling play_next() to avoid thread issues
+        await play_next_async(ctx)
+
 
 @bot.command()
 async def join(ctx):
+    print(f"[DEBUG] !join triggered by {ctx.author}")
     if not ctx.author.voice:
-        return await ctx.send("❌ You need to be in a voice channel first!")
-    
-    if not ctx.voice_client:
-        vc: wavelink.Player = await ctx.author.voice.channel.connect(cls=wavelink.Player)
-        vc.home = ctx.channel 
-        await ctx.send(f"✅ Joined {ctx.author.voice.channel.mention}!")
+        return await ctx.send("You need to be in a voice channel first!")
+
+    channel = ctx.author.voice.channel
+    if ctx.voice_client:
+        await ctx.voice_client.move_to(channel)
     else:
-        await ctx.send("✅ I'm already in a voice channel.")
+        await channel.connect()
+    await ctx.send(f"Joined {channel.mention}!")
+
 
 @bot.command()
-async def play(ctx, *, search: str):
+async def play(ctx, *, query: str):
+    print(f"[DEBUG] !play triggered with query: {query}")
+
     if not ctx.author.voice:
-        return await ctx.send("❌ You need to join a voice channel first!")
+        return await ctx.send("You need to be in a voice channel first!")
 
-    vc: wavelink.Player = ctx.voice_client
-    if not vc:
-        vc = await ctx.author.voice.channel.connect(cls=wavelink.Player)
-        vc.home = ctx.channel
+    if not ctx.voice_client:
+        print("[DEBUG] Bot not in VC, auto-joining...")
+        await ctx.author.voice.channel.connect()
 
-    # Search for the track using Wavelink (YouTube, SoundCloud, etc.)
-    tracks: wavelink.Search = await wavelink.Playable.search(search)
-    if not tracks:
-        return await ctx.send(f"❌ Could not find any songs for `{search}`.")
-    
-    # Grab the top search result
-    track: wavelink.Playable = tracks[0]
-
-    # Put it in the queue
-    await vc.queue.put_wait(track)
-
-    if not vc.playing:
-        # If nothing is playing, start immediately
-        await vc.play(vc.queue.get())
-        await ctx.send(f"▶️ Now playing: **{track.title}**")
+    # --- Handle YouTube links ---
+    if "youtube.com" in query or "youtu.be" in query:
+        msg = await ctx.send("ðŸ”— YouTube link detected. Bypassing IP blocks via title extraction...")
+        try:
+            yt_url = re.search(r'(https?://[^\s]+)', query).group(1)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"https://www.youtube.com/oembed?url={yt_url}&format=json",
+                    timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        query = data['title']
+                        print(f"[DEBUG] Extracted YouTube title: {query}")
+        except Exception as e:
+            print(f"[DEBUG ERROR] YouTube oEmbed failed: {e}")
+    # --- Handle Spotify links ---
+    elif "spotify.com" in query:
+        msg = await ctx.send("ðŸŽ§ Spotify link detected. Extracting title...")
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(query, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    text = await resp.text()
+                    match = re.search(r'<title>(.*?)</title>', text)
+                    if match:
+                        query = match.group(1).split(" | ")[0]
+                        print(f"[DEBUG] Spotify title extracted: {query}")
+        except Exception as e:
+            print(f"[DEBUG ERROR] Spotify extraction failed: {e}")
     else:
-        await ctx.send(f"📋 Added **{track.title}** to the queue at position #{vc.queue.count}.")
+        msg = await ctx.send(f"ðŸ” Searching SoundCloud for `{query}`...")
+
+    # --- Run yt-dlp in executor (NEVER block the event loop) ---
+    is_url = query.startswith('http')
+    search_query = query if is_url else f"scsearch:{query}"
+    print(f"[DEBUG] Sending to yt-dlp: {search_query}")
+
+    try:
+        data = await bot.loop.run_in_executor(
+            None,
+            lambda: ytdl.extract_info(search_query, download=False)
+        )
+        print("[DEBUG] yt-dlp extraction successful.")
+    except Exception as e:
+        print(f"[DEBUG ERROR] yt-dlp failed: {e}")
+        return await msg.edit(content="âŒ Could not retrieve audio. Try a different search or link.")
+
+    if not data:
+        return await msg.edit(content="âŒ No data returned from yt-dlp.")
+
+    if 'entries' in data:
+        if not data['entries']:
+            return await msg.edit(content="âŒ No results found for that search.")
+        data = data['entries'][0]
+
+    song = {
+        'title': data.get('title', 'Unknown Title'),
+        'url': data.get('url'),
+        'webpage_url': data.get('webpage_url', data.get('url', ''))
+    }
+
+    if not song['url']:
+        return await msg.edit(content="âŒ Couldn't extract a stream URL for that track.")
+
+    print(f"[DEBUG] Prepared song: {song['title']}")
+
+    guild_id = ctx.guild.id
+    music_queues.setdefault(guild_id, [])
+    music_queues[guild_id].append(song)
+    print(f"[DEBUG] Queue length: {len(music_queues[guild_id])}")
+
+    if not ctx.voice_client.is_playing() and not ctx.voice_client.is_paused():
+        await msg.edit(content="â–¶ï¸ Starting playback...")
+        # Call the ASYNC version directly since we're in an async context
+        await play_next_async(ctx)
+    else:
+        await msg.edit(content=f"âœ… Added to queue: **{song['title']}** (Position #{len(music_queues[guild_id])})")
+
 
 @bot.command()
 async def skip(ctx):
-    vc: wavelink.Player = ctx.voice_client
-    if vc and vc.playing:
-        await vc.skip(force=True)
-        await ctx.send("⏭️ Skipped the current song.")
+    print("[DEBUG] !skip triggered.")
+    if ctx.voice_client and ctx.voice_client.is_playing():
+        ctx.voice_client.stop()  # `after` callback fires play_next automatically
+        await ctx.send("â­ï¸ Skipped.")
     else:
-        await ctx.send("❌ Nothing is playing to skip.")
+        await ctx.send("Nothing is playing right now.")
+
 
 @bot.command()
 async def pause(ctx):
-    vc: wavelink.Player = ctx.voice_client
-    if vc and vc.playing:
-        await vc.pause(True)
-        await ctx.send("⏸️ Paused the music.")
+    if ctx.voice_client and ctx.voice_client.is_playing():
+        ctx.voice_client.pause()
+        print("[DEBUG] Paused.")
+        await ctx.send("â¸ï¸ Paused.")
     else:
-        await ctx.send("❌ Nothing is playing.")
+        await ctx.send("Nothing is playing.")
+
 
 @bot.command()
 async def resume(ctx):
-    vc: wavelink.Player = ctx.voice_client
-    if vc and vc.paused:
-        await vc.pause(False)
-        await ctx.send("▶️ Resumed the music.")
+    if ctx.voice_client and ctx.voice_client.is_paused():
+        ctx.voice_client.resume()
+        print("[DEBUG] Resumed.")
+        await ctx.send("â–¶ï¸ Resumed.")
     else:
-        await ctx.send("❌ Music is not paused.")
+        await ctx.send("Music isn't paused or nothing is in the player.")
+
 
 @bot.command()
 async def stop(ctx):
-    vc: wavelink.Player = ctx.voice_client
-    if vc:
-        vc.queue.clear()
-        await vc.disconnect()
-        await ctx.send("⏹️ Stopped music, cleared queue, and left.")
+    print("[DEBUG] !stop triggered.")
+    if ctx.voice_client:
+        guild_id = ctx.guild.id
+        music_queues[guild_id] = []
+        current_song[guild_id] = None
+        loop_mode[guild_id] = 0
+        ctx.voice_client.stop()
+        await ctx.voice_client.disconnect()
+        await ctx.send("â¹ï¸ Stopped, cleared queue, and left the voice channel.")
     else:
-        await ctx.send("❌ I'm not in a voice channel.")
+        await ctx.send("I'm not in a voice channel.")
+
+
+@bot.command()
+async def loop(ctx):
+    guild_id = ctx.guild.id
+    new_mode = (loop_mode.get(guild_id, 0) + 1) % 3
+    loop_mode[guild_id] = new_mode
+    labels = ["**OFF**", "**CURRENT SONG** ðŸ”‚", "**ENTIRE QUEUE** ðŸ”"]
+    await ctx.send(f"Loop mode set to: {labels[new_mode]}")
+
+
+@bot.command()
+async def shuffle(ctx):
+    guild_id = ctx.guild.id
+    q = music_queues.get(guild_id, [])
+    if len(q) > 1:
+        random.shuffle(q)
+        await ctx.send("ðŸ”€ Queue shuffled!")
+    else:
+        await ctx.send("Not enough songs in the queue to shuffle.")
+
+
+@bot.command(aliases=["nowplaying"])
+async def np(ctx):
+    song = current_song.get(ctx.guild.id)
+    if song:
+        embed = discord.Embed(
+            title="Now Playing ðŸŽµ",
+            description=f"**[{song['title']}]({song['webpage_url']})**",
+            color=discord.Color.green()
+        )
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send("Nothing is currently playing.")
+
 
 @bot.command()
 async def queue(ctx):
-    vc: wavelink.Player = ctx.voice_client
-    if not vc or vc.queue.is_empty:
-        return await ctx.send("📋 The queue is currently empty.")
-    
-    queue_list = "\n".join([f"**{i+1}.** {track.title}" for i, track in enumerate(vc.queue)])
-    
-    embed = discord.Embed(
-        title="📋 Current Queue",
-        description=queue_list[:4000],
-        color=discord.Color.blurple()
-    )
-    await ctx.send(embed=embed)
+    guild_id = ctx.guild.id
+    q = music_queues.get(guild_id, [])
+    if q:
+        queue_list = "\n".join(
+            [f"**{i+1}.** {s['title']}" for i, s in enumerate(q[:10])]
+        )
+        if len(q) > 10:
+            queue_list += f"\n*...and {len(q) - 10} more.*"
+        embed = discord.Embed(
+            title="ðŸ“‹ Current Queue",
+            description=queue_list,
+            color=discord.Color.blurple()
+        )
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send("The queue is empty.")
 
 
+@bot.command()
+async def clear(ctx):
+    music_queues[ctx.guild.id] = []
+    await ctx.send("ðŸ—‘ï¸ Queue cleared.")
+
+
+@bot.command()
+async def remove(ctx, *, identifier: str):
+    guild_id = ctx.guild.id
+    q = music_queues.get(guild_id, [])
+    if not q:
+        return await ctx.send("The queue is empty.")
+
+    if identifier.isdigit():
+        idx = int(identifier) - 1
+        if 0 <= idx < len(q):
+            removed = q.pop(idx)
+            return await ctx.send(f"âŒ Removed **{removed['title']}** from the queue.")
+        return await ctx.send("Invalid position number.")
+
+    for i, song in enumerate(q):
+        if identifier.lower() in song['title'].lower():
+            removed = q.pop(i)
+            return await ctx.send(f"âŒ Removed **{removed['title']}** from the queue.")
+
+    await ctx.send("Couldn't find that song in the queue.")
+            
+            
 # ==========================================
-# 8. RUN BOT
+# 6. RUN
 # ==========================================
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
