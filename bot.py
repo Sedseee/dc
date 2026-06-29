@@ -542,7 +542,7 @@ class MyBot(commands.Bot):
         nodes = [
             wavelink.Node(
                 identifier="Sedse-Private-Node",
-                uri="lavalink-production-9c8e.up.railway.app",  # e.g., https://lavalink-production-xxxx.up.railway.app:443
+                uri="https://lavalink-production-9c8e.up.railway.app:443",  # e.g., https://lavalink-production-xxxx.up.railway.app:443
                 password="sedsemusic2026"                    # The password you set in Step 2
             )
         ]
