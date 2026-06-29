@@ -537,13 +537,16 @@ class MyBot(commands.Bot):
             print(f"sync failed: {e}")
 
         # --- WAVELINK NODE SETUP (LAVALINK) ---
+        # --- WAVELINK NODE SETUP (LAVALINK) ---
         nodes = [
-            wavelink.Node(identifier="Node1", uri="http://89.106.84.59:4000", password="heavencloud.in"),
-            wavelink.Node(identifier="Node2", uri="https://lavalink.devamop.in:443", password="DevamOP"),
-            wavelink.Node(identifier="Node3", uri="https://lava-v4.ajieblogs.eu.org:443", password="https://dsc.gg/ajidevserver"),
-            wavelink.Node(identifier="Node4", uri="http://lavalink.jirayu.net:13592", password="youshallnotpass"),
-            wavelink.Node(identifier="Node5", uri="http://sg1-nodelink.nyxbot.app:3000", password="nyxbot.app/support"),
-            wavelink.Node(identifier="Node6", uri="http://lavalink.triniumhost.com:4333", password="free")
+            # Fallback 1: AjieDev V4
+            wavelink.Node(identifier="AjieDev", uri="https://lavalinkv4.serenetia.com:443", password="https://dsc.gg/ajidevserver"),
+            
+            # Fallback 2: Standard Lava.link
+            wavelink.Node(identifier="LavaLink", uri="https://lava.link:443", password="youshallnotpass"),
+            
+            # Fallback 3: Kudasai
+            wavelink.Node(identifier="Kudasai", uri="http://lavalink.kudasai.space:80", password="youshallnotpass")
         ]
         try:
             await wavelink.Pool.connect(nodes=nodes, client=self)
