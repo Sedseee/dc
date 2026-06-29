@@ -426,46 +426,32 @@ class ModView(discord.ui.View):
 # ==========================================
 
 async def connect_nodes(client: commands.Bot):
-    """Connect to FREE Public Lavalink Nodes with IP Fallback."""
+    """Connect to FREE Public Lavalink Nodes."""
     print("[MUSIC] Attempting to connect to Lavalink...")
     
-    # We use a mix of hostnames and direct IPs to ensure the bot starts 
-    # even if one provider's DNS is acting up.
+    # Updated list of active, reliable free nodes.
+    # Wavelink will automatically use the first one that connects successfully.
     nodes = [
-        # Node 1: Fast Global Node (SSL)
-        wavelink.Node(
-            uri="https://lavalink.lexis.host:443", 
-            password="lexishost"
-        ),
-        # Node 2: Stable Community Node
         wavelink.Node(
             uri="http://lavalink.jirayu.net:13592", 
             password="youshallnotpass"
         ),
-        # Node 3: Direct IP Node (Bypasses DNS issues completely)
         wavelink.Node(
-            uri="http://116.202.244.138:2333", 
-            password="youshallnotpass"
+            uri="http://89.106.84.59:4000", 
+            password="heavencloud.in"
         ),
-        # Node 4: Secondary Public Node
         wavelink.Node(
-            uri="http://node.triniumhost.com:2333", 
-            password="youshallnotpass"
+            uri="https://lavalink.devamop.in:443", 
+            password="DevamOP"
         )
     ]
     
     try:
-        # Wavelink 3.0+ will attempt to connect to all nodes in the pool.
-        # It will use the best available one for playback.
         await wavelink.Pool.connect(client=client, nodes=nodes)
-        print("[MUSIC] Lavalink Pool initialized!")
+        print("[MUSIC] Connected to a Public Lavalink Node successfully!")
     except Exception as e:
-        print(f"[MUSIC ERROR] Failed to initialize node pool: {e}")
+        print(f"[MUSIC ERROR] Failed to connect to Lavalink Nodes: {e}")
 
-# This ensures that if a node fails later, the bot doesn't crash
-@bot.event
-async def on_wavelink_node_ready(node: wavelink.Node):
-    print(f"[MUSIC] Node {node.identifier} is ready and connected!")
 # ==========================================
 # 3. BOT CLASS
 # ==========================================
