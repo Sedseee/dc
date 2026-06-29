@@ -538,19 +538,18 @@ class MyBot(commands.Bot):
 
         # --- WAVELINK NODE SETUP (LAVALINK) ---
         # --- WAVELINK NODE SETUP (LAVALINK) ---
+        # --- WAVELINK NODE SETUP (LAVALINK) ---
         nodes = [
-            # Fallback 1: AjieDev V4
-            wavelink.Node(identifier="AjieDev", uri="https://lavalinkv4.serenetia.com:443", password="https://dsc.gg/ajidevserver"),
-            
-            # Fallback 2: Standard Lava.link
-            wavelink.Node(identifier="LavaLink", uri="https://lava.link:443", password="youshallnotpass"),
-            
-            # Fallback 3: Kudasai
-            wavelink.Node(identifier="Kudasai", uri="http://lavalink.kudasai.space:80", password="youshallnotpass")
+            wavelink.Node(
+                identifier="Sedse-Private-Node",
+                uri="lavalink-production-9c8e.up.railway.app",  # e.g., https://lavalink-production-xxxx.up.railway.app:443
+                password="sedsemusic2026"                    # The password you set in Step 2
+            )
         ]
+        
         try:
             await wavelink.Pool.connect(nodes=nodes, client=self)
-            print("Successfully connected to Lavalink nodes!")
+            print("Successfully connected to the Private Lavalink node!")
         except Exception as e:
             print(f"Failed to connect to Lavalink: {e}")
 
