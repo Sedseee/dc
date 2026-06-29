@@ -429,11 +429,21 @@ async def connect_nodes(client: commands.Bot):
     """Connect to FREE Public Lavalink Nodes."""
     print("[MUSIC] Attempting to connect to Lavalink...")
     
-    # We provide multiple free public nodes. 
-    # Wavelink will automatically use the first one that successfully connects.
+    # Updated list of active, reliable free nodes.
+    # Wavelink will automatically use the first one that connects successfully.
     nodes = [
-        wavelink.Node(uri="https://lava.link", password="I'm a secret"),
-        wavelink.Node(uri="https://lavalink.devamop.in", password="devamop.in")
+        wavelink.Node(
+            uri="http://lavalink.jirayu.net:13592", 
+            password="youshallnotpass"
+        ),
+        wavelink.Node(
+            uri="http://89.106.84.59:4000", 
+            password="heavencloud.in"
+        ),
+        wavelink.Node(
+            uri="https://lavalink.devamop.in:443", 
+            password="DevamOP"
+        )
     ]
     
     try:
