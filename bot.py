@@ -1710,13 +1710,13 @@ async def texttospeech(ctx, *, message: str):
     status_msg = await ctx.send("🎙️ Generating TTS...")
 
     try:
-        # 2. Generate the TTS audio in-memory (Super fast, no disk saving required)
+        # 2. Generate the TTS audio in-memory
         tts = gTTS(text=message, lang='en', slow=False)
         fp = io.BytesIO()
         tts.write_to_fp(fp)
-        fp.seek(0) # Reset the buffer position to the start
+        fp.seek(0)
 
-        # 3. Upload it to Discord silently to generate a valid remote URL for Lavalink
+        # 3. Upload it to Discord silently
         audio_file = discord.File(fp, filename="tts.mp3")
         upload_msg = await ctx.send(file=audio_file)
         tts_url = upload_msg.attachments[0].url
@@ -1730,8 +1730,7 @@ async def texttospeech(ctx, *, message: str):
         track: wavelink.Playable = tracks[0]
         track.requester_id = ctx.author.id
         
-        # We rename the track title so it shows nicely in the "Now Playing" embed
-        track.title = f"TTS: {message[:50]}..." if len(message) > 50 else f"TTS: {message}"
+        # We removed the track.title line here!
 
         if not player.playing:
             await player.play(track)
@@ -1740,13 +1739,11 @@ async def texttospeech(ctx, *, message: str):
             await player.queue.put_wait(track)
             await status_msg.edit(content=f"✅ Added TTS to queue: **{message}** (Position #{len(player.queue)})")
 
-        # 5. Clean up the uploaded audio file from chat after 3 minutes so it doesn't cause clutter
-        # Lavalink caches the audio instantly, so deleting it later won't interrupt the playback
+        # 5. Clean up the uploaded audio file from chat after 3 minutes
         await upload_msg.delete(delay=180)
 
     except Exception as e:
         await status_msg.edit(content=f"❌ Error generating TTS: {e}")
-
 
             
 # ==========================================
