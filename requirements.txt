@@ -5,3 +5,4 @@ aiohttp
 davey
 imageio-ffmpeg
 wavelink
+gTTS
