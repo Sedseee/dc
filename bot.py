@@ -1539,9 +1539,9 @@ async def skip(ctx):
         # REMINDER: Replace <YOUR_REPO_NAME> with the actual name of your repository where the Audios folder is.
         # Example: "https://raw.githubusercontent.com/SedseXD/sedsejjs/main/Audios/audio1.mp3"
         punish_urls = [
-            "https://github.com/Sedseee/dc/blob/main/Audios/E-girl-2026-06-30-23-46-You-dare-skip-sedse's-requested-song%2C-don't-even.mp3",
-            "https://github.com/Sedseee/dc/blob/main/Audios/Hatsune-Miku-(Text-To-Speech)-2026-06-30-23-49-You-dare-skip-sedse's-requested-song%2C-don't-even.mp3",
-            "https://github.com/Sedseee/dc/blob/main/Audios/Super-Smash-Bros.-4Ultimate-Announcer-2026-06-30-23-44-You-dare-skip-sedse's-requested-song%2C-don't-even.mp3"
+            "https://files.catbox.moe/harlic.mp3",
+            "https://files.catbox.moe/xuadye.mp3",
+            "https://files.catbox.moe/3oyux7.mp3"
         ]
         url = random.choice(punish_urls)
         
