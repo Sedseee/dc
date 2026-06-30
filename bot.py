@@ -7,6 +7,7 @@ import random
 import re
 import asyncio
 import aiohttp
+import wavelink
 from datetime import timedelta
 from typing import Union
 from discord.ext import commands
@@ -148,6 +149,7 @@ active_unpurges = {}
 active_badapples = {}
 user_cooldowns = {}
 mod_slur_warnings = {} 
+owner_skip_cooldowns = {} # Music Owner Skip Protection Cooldown
 
 def load_json(filename, default_type=list):
     try:
@@ -288,8 +290,6 @@ class OwnerBanConfirmView(discord.ui.View):
     async def just_mute(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.message.edit(content=f"ban shot down by {interaction.user.mention}. {self.target.mention} is just gonna stay muted.", view=None)
         self.stop()
-
-# --- MODVIEW UI CLASSES ---
 
 class UnbanModal(discord.ui.Modal, title='unban user'):
     user_id = discord.ui.TextInput(label='user id', placeholder='drop their discord id here', required=True)
@@ -517,7 +517,9 @@ class ModView(discord.ui.View):
         except commands.CheckFailure: await interaction.followup.send("you lack perms for this.", ephemeral=True)
         except Exception as e: await interaction.followup.send(f"broken: {e}", ephemeral=True)
 
-import wavelink
+# ==========================================
+# 2. BOT CLASS
+# ==========================================
 
 class MyBot(commands.Bot):
     def __init__(self):
@@ -537,13 +539,11 @@ class MyBot(commands.Bot):
             print(f"sync failed: {e}")
 
         # --- WAVELINK NODE SETUP (LAVALINK) ---
-        # --- WAVELINK NODE SETUP (LAVALINK) ---
-        # --- WAVELINK NODE SETUP (LAVALINK) ---
         nodes = [
             wavelink.Node(
                 identifier="Sedse-Private-Node",
-                uri="https://lavalink-production-9c8e.up.railway.app:443",  # e.g., https://lavalink-production-xxxx.up.railway.app:443
-                password="sedsemusic2026"                    # The password you set in Step 2
+                uri="https://lavalink-production-9c8e.up.railway.app:443", 
+                password="sedsemusic2026"
             )
         ]
         
@@ -554,8 +554,6 @@ class MyBot(commands.Bot):
             print(f"Failed to connect to Lavalink: {e}")
 
 bot = MyBot()
-
-# NOTE: The Opus Illusion Hack has been entirely removed, as Lavalink handles audio natively.
 
 # ==========================================
 # 3. HELPERS & SYSTEMS
@@ -789,18 +787,13 @@ async def priority(ctx):
 async def whitelist(ctx, member: discord.Member = None):
     pwl_data = load_json(PRIORITY_WHITELIST_FILE, dict)
     gid = str(ctx.guild.id)
-
-    # If no member is mentioned, display the list
     if member is None:
         users = pwl_data.get(gid, [])
         if not users:
             return await ctx.send("the priority whitelist is currently empty.")
-        
         mentions = [f"<@{uid}>" for uid in users]
         embed = discord.Embed(title="priority whitelisted users", description="\n".join(mentions), color=discord.Color.gold())
         return await ctx.send(embed=embed)
-
-    # If a member is mentioned, add them to the whitelist
     if not await is_mod_owner(ctx): return await ctx.send("only sedse can mess with the priority whitelist, back off.")
     if gid not in pwl_data: pwl_data[gid] = []
     if str(member.id) not in pwl_data[gid]:
@@ -826,18 +819,13 @@ async def unwhitelist(ctx, member: discord.Member):
 async def whitelist(ctx, member: discord.Member = None):
     wl_data = load_json(WHITELIST_FILE, dict)
     gid = str(ctx.guild.id)
-    
-    # If no member is mentioned, display the list
     if member is None:
         users = wl_data.get(gid, [])
         if not users:
             return await ctx.send("the whitelist is currently empty.")
-            
         mentions = [f"<@{uid}>" for uid in users]
         embed = discord.Embed(title="whitelisted users", description="\n".join(mentions), color=discord.Color.green())
         return await ctx.send(embed=embed)
-
-    # If a member is mentioned, add them to the whitelist
     if not await is_mod_owner(ctx): return await ctx.send("only sedse can mess with the whitelist, back off.")
     if gid not in wl_data: wl_data[gid] = []
     if str(member.id) not in wl_data[gid]:
@@ -1405,9 +1393,6 @@ async def umarizz(ctx, member: discord.Member = None):
 # 6. MUSIC SYSTEM SETUP (LAVALINK)
 # ==========================================
 
-import wavelink
-import random
-
 # --- EVENTS ---
 
 @bot.event
@@ -1421,7 +1406,8 @@ async def on_wavelink_track_start(payload: wavelink.TrackStartEventPayload):
         return
 
     # Automatically send the "Now Playing" message into the text channel
-    if hasattr(player, "home"):
+    # EXCEPT for punishment audios (bot is requester)
+    if hasattr(player, "home") and getattr(payload.track, "requester_id", None) != bot.user.id:
         embed = discord.Embed(
             title="Now Playing 🎵",
             description=f"**[{payload.track.title}]({payload.track.uri})**\n*By {payload.track.author}*",
@@ -1431,6 +1417,27 @@ async def on_wavelink_track_start(payload: wavelink.TrackStartEventPayload):
             embed.set_thumbnail(url=payload.track.artwork)
         await player.home.send(embed=embed)
 
+@bot.event
+async def on_wavelink_track_end(payload: wavelink.TrackEndEventPayload):
+    player: wavelink.Player | None = payload.player
+    if not player:
+        return
+
+    # Check if the track finished naturally AND we have a paused owner song waiting
+    if payload.reason.lower() == "finished" and getattr(player, "interrupted_track", None):
+        track = player.interrupted_track
+        pos = getattr(player, "interrupted_position", 0)
+
+        # Clear the saved state
+        player.interrupted_track = None
+        player.interrupted_position = None
+
+        # Play the owner's song from the exact millisecond it was paused
+        await player.play(track, start=pos)
+        
+        if hasattr(player, "home"):
+            await player.home.send(f"▶️ The interruption is over. Resuming owner's song: **{track.title}**")
+        return
 
 # --- COMMANDS ---
 
@@ -1449,52 +1456,116 @@ async def join(ctx):
         await ctx.send(f"Moved to {ctx.author.voice.channel.mention}!")
 
 @bot.command()
-async def play(ctx, *, query: str):
+async def play(ctx, *, query: str = None):
     if not ctx.author.voice:
         return await ctx.send("You need to be in a voice channel first!")
+
+    if ctx.message.attachments:
+        attachment = ctx.message.attachments[0]
+        valid_extensions = ('.mp3', '.mp4', '.wav', '.ogg', '.flac', '.m4a', '.webm', '.mov')
+        if any(attachment.filename.lower().endswith(ext) for ext in valid_extensions):
+            query = attachment.url
+        else:
+            return await ctx.send("❌ Unsupported file type! Please attach a valid audio or video file.")
+
+    if not query:
+        return await ctx.send("You need to provide a search query, a link, or attach a file!")
 
     player: wavelink.Player = ctx.voice_client
     if not player:
         player = await ctx.author.voice.channel.connect(cls=wavelink.Player)
         player.autoplay = wavelink.AutoPlayMode.partial
 
-    player.home = ctx.channel  # Bind the player to this channel for 'Now Playing' messages
+    player.home = ctx.channel
 
-    msg = await ctx.send(f"🔍 Searching for `{query}`...")
+    msg = await ctx.send(f"🔍 Searching for media...")
 
     try:
-        # Playable.search natively handles YouTube, Soundcloud, Spotify, and URLs
         tracks: wavelink.Search = await wavelink.Playable.search(query)
     except Exception as e:
         return await msg.edit(content=f"❌ Error searching: {e}")
 
     if not tracks:
-        return await msg.edit(content="❌ No results found for that search.")
+        return await msg.edit(content="❌ No results found for that search or file.")
 
     if isinstance(tracks, wavelink.Playlist):
-        # Adding an entire playlist to the queue
+        for t in tracks:
+            t.requester_id = ctx.author.id # Track who requested
+            
         added = await player.queue.put_wait(tracks)
         await msg.edit(content=f"✅ Added playlist **{tracks.name}** ({added} songs) to queue.")
         if not player.playing:
             await player.play(player.queue.get())
     else:
-        # Playing a single track
         track: wavelink.Playable = tracks[0]
+        track.requester_id = ctx.author.id # Track who requested
+        
         if not player.playing:
             await player.play(track)
-            await msg.edit(content=f"▶️ Starting playback...")
+            title = ctx.message.attachments[0].filename if ctx.message.attachments else track.title
+            await msg.edit(content=f"▶️ Starting playback: **{title}**")
         else:
             await player.queue.put_wait(track)
-            await msg.edit(content=f"✅ Added to queue: **{track.title}** (Position #{len(player.queue)})")
+            title = ctx.message.attachments[0].filename if ctx.message.attachments else track.title
+            await msg.edit(content=f"✅ Added to queue: **{title}** (Position #{len(player.queue)})")
 
 @bot.command()
 async def skip(ctx):
     player: wavelink.Player = ctx.voice_client
-    if player and player.playing:
-        await player.skip(force=True)
-        await ctx.send("⏭️ Skipped.")
-    else:
-        await ctx.send("Nothing is playing right now.")
+    if not player or not player.playing:
+        return await ctx.send("Nothing is playing right now.")
+
+    current_track = player.current
+    requester_id = getattr(current_track, "requester_id", None)
+    
+    is_owner_song = False
+    if requester_id:
+        # Check if the song belongs to the Server Owner or the Bot Owner (sedse)
+        if requester_id == ctx.guild.owner_id or await bot.is_owner(discord.Object(id=requester_id)):
+            is_owner_song = True
+
+    # If it's the owner's song AND the person trying to skip is NOT the owner
+    if is_owner_song and ctx.author.id != requester_id:
+        now = discord.utils.utcnow().timestamp()
+        last_triggered = owner_skip_cooldowns.get(ctx.guild.id, 0)
+
+        # 1-minute cooldown check
+        if now - last_triggered < 60:
+            return await ctx.send("sedse's song cannot be skipped.")
+
+        # Update the cooldown timer
+        owner_skip_cooldowns[ctx.guild.id] = now
+
+        # REMINDER: Replace <YOUR_REPO_NAME> with the actual name of your repository where the Audios folder is.
+        # Example: "https://raw.githubusercontent.com/SedseXD/sedsejjs/main/Audios/audio1.mp3"
+        punish_urls = [
+            "https://github.com/Sedseee/dc/blob/main/Audios/E-girl-2026-06-30-23-46-You-dare-skip-sedse's-requested-song%2C-don't-even.mp3",
+            "https://github.com/Sedseee/dc/blob/main/Audios/Hatsune-Miku-(Text-To-Speech)-2026-06-30-23-49-You-dare-skip-sedse's-requested-song%2C-don't-even.mp3",
+            "https://github.com/Sedseee/dc/blob/main/Audios/Super-Smash-Bros.-4Ultimate-Announcer-2026-06-30-23-44-You-dare-skip-sedse's-requested-song%2C-don't-even.mp3"
+        ]
+        url = random.choice(punish_urls)
+        
+        try:
+            punish_tracks = await wavelink.Playable.search(url)
+            if punish_tracks:
+                punish_track = punish_tracks[0]
+                punish_track.requester_id = bot.user.id # Set bot as requester to avoid loops
+                
+                # SAVE THE STATE: Save the owner's track and exact millisecond position
+                player.interrupted_track = current_track
+                player.interrupted_position = player.position
+
+                # Playing a new song instantly replaces and stops the current one
+                await player.play(punish_track)
+                return await ctx.send("❌ You thought you could skip sedse's song? Think again.")
+        except Exception as e:
+            print(f"Failed to load punishment audio: {e}")
+            return await ctx.send("sedse's song cannot be skipped.") # Fallback just in case
+
+    # Normal Skip Logic (executes if it's not an owner song, OR if the owner skipped their own song)
+    await player.skip(force=True)
+    await ctx.send("⏭️ Skipped.")
+
 
 @bot.command()
 async def pause(ctx):
@@ -1622,7 +1693,7 @@ async def remove(ctx, *, identifier: str):
     await ctx.send("Couldn't find that song in the queue.")
             
 # ==========================================
-# 6. RUN
+# 7. RUN
 # ==========================================
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
