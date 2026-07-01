@@ -879,273 +879,42 @@ class TypeModal(discord.ui.Modal, title='Type in a Textbox'):
             await interaction.followup.send(f"Failed to type: {e}", ephemeral=True)
 
 class BrowserView(discord.ui.View):
-
-# ==========================================
-# PLAYWRIGHT BROWSER UI & HELPERS
-# ==========================================
-
-async def get_browser_screenshot(session_data):
-    page = session_data["page"]
-    show_grid = session_data.get("show_grid", False)
-    
-    js_show_grid = 'true' if show_grid else 'false'
-    
-    js_code = f"""
-    () => {{
-        // --- 1. Red Tags (Always Active) ---
-        document.querySelectorAll('.sedse-tag').forEach(e => e.remove());
-        let count = 1;
-        document.querySelectorAll('a, button, input, textarea, [role="button"]').forEach(el => {{
-            let rect = el.getBoundingClientRect();
-            if(rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= window.innerHeight) {{
-                el.setAttribute('data-sedse-id', count);
-                let tag = document.createElement('div');
-                tag.className = 'sedse-tag';
-                tag.innerText = count;
-                tag.style.position = 'fixed';
-                tag.style.left = rect.left + 'px';
-                tag.style.top = rect.top + 'px';
-                tag.style.background = 'red';
-                tag.style.color = 'white';
-                tag.style.fontWeight = 'bold';
-                tag.style.padding = '1px 4px';
-                tag.style.fontSize = '12px';
-                tag.style.zIndex = '999999';
-                tag.style.pointerEvents = 'none';
-                document.body.appendChild(tag);
-                count++;
-            }}
-        }});
-
-        // --- 2. X/Y Grid (Toggleable) ---
-        let oldGrid = document.getElementById('sedse-grid');
-        if(oldGrid) oldGrid.remove();
-        
-        if ({js_show_grid}) {{
-            let svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.id = 'sedse-grid';
-            svg.style.position = 'fixed';
-            svg.style.top = '0';
-            svg.style.left = '0';
-            svg.style.width = '100vw';
-            svg.style.height = '100vh';
-            svg.style.pointerEvents = 'none';
-            svg.style.zIndex = '9999999';
-            
-            for(let x = 100; x < window.innerWidth; x += 100) {{
-                let line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                line.setAttribute('x1', x); line.setAttribute('y1', 0);
-                line.setAttribute('x2', x); line.setAttribute('y2', window.innerHeight);
-                line.setAttribute('stroke', 'rgba(0, 255, 0, 0.4)');
-                line.setAttribute('stroke-width', '1');
-                svg.appendChild(line);
-                
-                let txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                txt.setAttribute('x', x + 2); txt.setAttribute('y', 15);
-                txt.setAttribute('fill', '#00ff00');
-                txt.setAttribute('font-size', '13px');
-                txt.setAttribute('font-weight', 'bold');
-                txt.style.textShadow = '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000';
-                txt.textContent = x;
-                svg.appendChild(txt);
-            }}
-            
-            for(let y = 100; y < window.innerHeight; y += 100) {{
-                let line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                line.setAttribute('x1', 0); line.setAttribute('y1', y);
-                line.setAttribute('x2', window.innerWidth); line.setAttribute('y2', y);
-                line.setAttribute('stroke', 'rgba(0, 255, 0, 0.4)');
-                line.setAttribute('stroke-width', '1');
-                svg.appendChild(line);
-                
-                let txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                txt.setAttribute('x', 2); txt.setAttribute('y', y - 2);
-                txt.setAttribute('fill', '#00ff00');
-                txt.setAttribute('font-size', '13px');
-                txt.setAttribute('font-weight', 'bold');
-                txt.style.textShadow = '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000';
-                txt.textContent = y;
-                svg.appendChild(txt);
-            }}
-            document.body.appendChild(svg);
-        }}
-    }}
-    """
-    await page.evaluate(js_code)
-    
-    screenshot_bytes = await page.screenshot(type="jpeg", quality=75)
-    return discord.File(io.BytesIO(screenshot_bytes), filename="browser.jpg")
-
-
-class ClickModal(discord.ui.Modal, title='Click an Element by Number'):
-    element_id = discord.ui.TextInput(label='Enter the red number to click', placeholder='e.g., 5', max_length=4)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        session = active_browsers.get(interaction.channel.id)
-        if not session:
-            return await interaction.followup.send("Browser session expired.", ephemeral=True)
-        
-        try:
-            page = session["page"]
-            target_id = self.element_id.value.strip()
-            click_js = f"""
-            (() => {{
-                let el = document.querySelector('[data-sedse-id="{target_id}"]');
-                if(el) {{ el.removeAttribute('target'); el.click(); }}
-            }})()
-            """
-            await page.evaluate(click_js)
-            await asyncio.sleep(2.5)
-            new_file = await get_browser_screenshot(session)
-            await interaction.message.edit(attachments=[new_file])
-        except Exception as e:
-            await interaction.followup.send(f"Failed to click: {e}", ephemeral=True)
-
-class XYClickModal(discord.ui.Modal, title='Click by Coordinates'):
-    x_coord = discord.ui.TextInput(label='X Coordinate (Left to Right)', placeholder='e.g., 640', max_length=5)
-    y_coord = discord.ui.TextInput(label='Y Coordinate (Top to Bottom)', placeholder='e.g., 360', max_length=5)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        session = active_browsers.get(interaction.channel.id)
-        if not session:
-            return await interaction.followup.send("Browser session expired.", ephemeral=True)
-        
-        try:
-            page = session["page"]
-            x = float(self.x_coord.value.strip())
-            y = float(self.y_coord.value.strip())
-            await page.mouse.click(x, y)
-            await asyncio.sleep(2.5) 
-            new_file = await get_browser_screenshot(session)
-            await interaction.message.edit(attachments=[new_file])
-        except ValueError:
-            await interaction.followup.send("Coordinates must be numbers!", ephemeral=True)
-        except Exception as e:
-            await interaction.followup.send(f"Failed to click coordinates: {e}", ephemeral=True)
-
-
-class DragModal(discord.ui.Modal, title='Drag & Drop'):
-    start_coord = discord.ui.TextInput(label='Start Position (X,Y)', placeholder='e.g., 200,350', max_length=11)
-    end_coord = discord.ui.TextInput(label='End Position (X,Y)', placeholder='e.g., 800,350', max_length=11)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        session = active_browsers.get(interaction.channel.id)
-        if not session:
-            return await interaction.followup.send("Browser session expired.", ephemeral=True)
-        
-        try:
-            page = session["page"]
-            sx, sy = map(float, self.start_coord.value.strip().split(','))
-            ex, ey = map(float, self.end_coord.value.strip().split(','))
-            
-            await page.mouse.move(sx, sy)        
-            await page.mouse.down()              
-            await asyncio.sleep(0.2)             
-            await page.mouse.move(ex, ey, steps=10) 
-            await asyncio.sleep(0.2)             
-            await page.mouse.up()                
-            
-            await asyncio.sleep(2.5) 
-            new_file = await get_browser_screenshot(session)
-            await interaction.message.edit(attachments=[new_file])
-        except ValueError:
-            await interaction.followup.send("Format must be exact! Use: 200,300", ephemeral=True)
-        except Exception as e:
-            await interaction.followup.send(f"Failed to drag: {e}", ephemeral=True)
-
-
-class TypeModal(discord.ui.Modal, title='Type in a Textbox'):
-    element_id = discord.ui.TextInput(label='Red number of the textbox', style=discord.TextStyle.short, max_length=4)
-    text_to_type = discord.ui.TextInput(label='What do you want to type?', style=discord.TextStyle.paragraph)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        session = active_browsers.get(interaction.channel.id)
-        if not session: return
-        
-        try:
-            page = session["page"]
-            target_id = self.element_id.value.strip()
-            focus_js = f"document.querySelector('[data-sedse-id=\"{target_id}\"]').focus()"
-            await page.evaluate(focus_js)
-            await page.keyboard.type(self.text_to_type.value)
-            await asyncio.sleep(0.5)
-            
-            new_file = await get_browser_screenshot(session)
-            await interaction.message.edit(attachments=[new_file])
-        except Exception as e:
-            await interaction.followup.send(f"Failed to type: {e}", ephemeral=True)
-
-
-class BrowserView(discord.ui.View):
     def __init__(self):
-        super().__init__(timeout=600)
+        super().__init__(timeout=600) # 10 minute timeout
 
-    # ROW 1 (Max 5 items)
-    @discord.ui.button(label="Click (#)", style=discord.ButtonStyle.primary, emoji="🔴", row=0)
+    @discord.ui.button(label="Click", style=discord.ButtonStyle.primary, emoji="🖱️")
     async def click_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ClickModal())
 
-    @discord.ui.button(label="Click (X,Y)", style=discord.ButtonStyle.primary, emoji="🎯", row=0)
-    async def xy_click_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(XYClickModal())
-
-    @discord.ui.button(label="Drag (X,Y)", style=discord.ButtonStyle.primary, emoji="✋", row=0)
-    async def drag_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(DragModal())
-
-    @discord.ui.button(label="Type Text", style=discord.ButtonStyle.success, emoji="⌨️", row=0)
+    @discord.ui.button(label="Type", style=discord.ButtonStyle.success, emoji="⌨️")
     async def type_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(TypeModal())
 
-    @discord.ui.button(label="Enter Key", style=discord.ButtonStyle.secondary, emoji="↩️", row=0)
+    @discord.ui.button(label="Enter (Submit)", style=discord.ButtonStyle.secondary, emoji="↩️")
     async def enter_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
-        session = active_browsers.get(interaction.channel.id)
-        if session:
-            await session["page"].keyboard.press("Enter")
-            await asyncio.sleep(2.5)
-            new_file = await get_browser_screenshot(session)
+        page = active_browsers.get(interaction.channel.id)
+        if page:
+            await page.keyboard.press("Enter")
+            await asyncio.sleep(2)
+            new_file = await get_browser_screenshot(page)
             await interaction.message.edit(attachments=[new_file])
 
-    # ROW 2 (Max 5 items)
-    @discord.ui.button(label="Toggle Grid", style=discord.ButtonStyle.secondary, emoji="🔲", row=1)
-    async def toggle_grid_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer()
-        session = active_browsers.get(interaction.channel.id)
-        if session:
-            session["show_grid"] = not session["show_grid"]
-            new_file = await get_browser_screenshot(session)
-            await interaction.message.edit(attachments=[new_file])
-
-    @discord.ui.button(label="Scroll Up", style=discord.ButtonStyle.secondary, emoji="⬆️", row=1)
-    async def scroll_up(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer()
-        session = active_browsers.get(interaction.channel.id)
-        if session:
-            await session["page"].mouse.wheel(0, -600)
-            await asyncio.sleep(0.5)
-            new_file = await get_browser_screenshot(session)
-            await interaction.message.edit(attachments=[new_file])
-
-    @discord.ui.button(label="Scroll Down", style=discord.ButtonStyle.secondary, emoji="⬇️", row=1)
+    @discord.ui.button(label="Scroll Down", style=discord.ButtonStyle.secondary, emoji="⬇️")
     async def scroll_down(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
-        session = active_browsers.get(interaction.channel.id)
-        if session:
-            await session["page"].mouse.wheel(0, 600)
+        page = active_browsers.get(interaction.channel.id)
+        if page:
+            await page.mouse.wheel(0, 600)
             await asyncio.sleep(0.5)
-            new_file = await get_browser_screenshot(session)
+            new_file = await get_browser_screenshot(page)
             await interaction.message.edit(attachments=[new_file])
 
-    @discord.ui.button(label="Close Browser", style=discord.ButtonStyle.danger, emoji="✖️", row=1)
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.danger, emoji="✖️")
     async def close_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        session = active_browsers.pop(interaction.channel.id, None)
-        if session:
-            await session["page"].close()
+        page = active_browsers.pop(interaction.channel.id, None)
+        if page:
+            await page.close()
         await interaction.response.edit_message(content="Browser session closed.", attachments=[], view=None)
 
 # ==========================================
@@ -2180,6 +1949,7 @@ async def texttospeech(ctx, *, message: str):
 
     except Exception as e:
         await status_msg.edit(content=f"❌ Error generating TTS: {e}")
+
 @bot.command()
 async def browse(ctx, *, url: str):
     global browser_instance
@@ -2199,20 +1969,19 @@ async def browse(ctx, *, url: str):
         )
         page = await context.new_page()
         
-        # Save it to our active sessions (We now store the grid state here too!)
-        session_data = {"page": page, "show_grid": False}
-        active_browsers[ctx.channel.id] = session_data
+        # Save it to our active sessions
+        active_browsers[ctx.channel.id] = page
 
         # Go to the URL (timeout after 20 seconds)
         await page.goto(url, timeout=20000, wait_until="domcontentloaded")
         await asyncio.sleep(2.5) # Give images time to load
 
-        # Take the screenshot with our red tags (and grid if enabled)
-        screenshot_file = await get_browser_screenshot(session_data)
+        # Take the screenshot with our red tags
+        screenshot_file = await get_browser_screenshot(page)
         
         await msg.delete()
         await ctx.send(
-            content=f"**Browsing:** `{url}`\n*Use `Click (#)` for red tags, or toggle the grid and use `Click (X,Y)` for precision.*", 
+            content=f"**Browsing:** `{url}`\n*Click the buttons below to interact. When clicking/typing, use the red numbers on the screen.*", 
             file=screenshot_file, 
             view=BrowserView()
         )
@@ -2220,7 +1989,7 @@ async def browse(ctx, *, url: str):
     except Exception as e:
         await msg.edit(content=f"❌ Failed to load website: {e}")
 
-
+            
 # ==========================================
 # 7. RUN
 # ==========================================
