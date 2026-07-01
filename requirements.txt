@@ -6,3 +6,4 @@ davey
 imageio-ffmpeg
 wavelink
 gTTS
+playwright
