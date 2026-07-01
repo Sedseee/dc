@@ -2107,9 +2107,9 @@ async def research(ctx, *, query: str = None):
         if query.startswith("http://") or query.startswith("https://"):
             url = query
         else:
-            # Route searches through DuckDuckGo Lite (it loads instantly and is text-only, perfect for scraping)
+            # Yahoo Search works perfectly with URL parameters and rarely blocks headless browsers
             safe_query = urllib.parse.quote(query)
-            url = f"https://lite.duckduckgo.com/lite/?q={safe_query}"
+            url = f"https://search.yahoo.com/search?p={safe_query}"
 
         # 1. Fetch web data using Playwright
         await msg.edit(content="browsing the web and extracting data...")
@@ -2122,15 +2122,28 @@ async def research(ctx, *, query: str = None):
         
         try:
             await page.goto(url, timeout=15000, wait_until="domcontentloaded")
-            # Extract raw text from the page body
-            text = await page.evaluate("document.body.innerText")
+            
+            # Extract only the relevant text (avoids cookie banners and menus)
+            js_extract = """
+            () => {
+                // Target search result containers (Yahoo, Bing, Google) or fallback to body
+                let container = document.querySelector('#web') || document.querySelector('#b_results') || document.querySelector('#search') || document.body;
+                
+                // Remove scripts and styles so we only get clean readable text
+                let elementsToRemove = container.querySelectorAll('script, style, noscript, header, footer');
+                elementsToRemove.forEach(el => el.remove());
+                
+                return container.innerText;
+            }
+            """
+            text = await page.evaluate(js_extract)
         finally:
             # Always close the page and context to prevent memory leaks
             await page.close()
             await context.close()
 
         if not text or len(text.strip()) < 50:
-            return await msg.edit(content="i couldn't find enough text data on that page to analyze.")
+            text = "No web data could be extracted. The site might be blocking bots."
 
         # 2. Process with Groq API
         await msg.edit(content="analyzing data with ai...")
@@ -2138,7 +2151,14 @@ async def research(ctx, *, query: str = None):
         # Limit text to ~8000 characters so we don't blow up the AI context window limit
         truncated_text = text[:8000]
         
-        system_prompt = "You are a helpful research assistant. Answer the user's query based ONLY on the provided web data. If the data doesn't contain the answer, say so. Keep your response concise, informative, and do not use any emojis."
+        # Updated prompt: Use web data if available, but fallback to internal knowledge if needed
+        system_prompt = (
+            "You are an intelligent research assistant. "
+            "Use the provided web data to answer the user's query accurately. "
+            "If the web data is insufficient, irrelevant, or blocked, use your own internal knowledge to fully answer the query. "
+            "Do not use any emojis. Keep the response clean, concise, and highly informative."
+        )
+        
         user_content = f"User Query: {query}\n\nWeb Data:\n{truncated_text}"
 
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
@@ -2179,7 +2199,6 @@ async def research(ctx, *, query: str = None):
     except Exception as e:
         print(f"Research command error: {e}")
         await msg.edit(content=f"an error occurred while researching: {e}")
-
 # ==========================================
 # 7. RUN
 # ==========================================
