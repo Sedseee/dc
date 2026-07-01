@@ -1,5 +1,5 @@
-# This base image already contains Python AND all the Linux dependencies for Playwright
-FROM mcr.microsoft.com/playwright/python:v1.42.0-jammy
+# Update to match the exact Playwright version (1.61.0)
+FROM mcr.microsoft.com/playwright/python:v1.61.0-jammy
 
 # Set the working directory inside the container
 WORKDIR /app
