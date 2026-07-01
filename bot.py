@@ -777,20 +777,23 @@ async def ai(ctx, *, prompt: str = None):
     if not prompt:
         return await ctx.send("you gotta give me a prompt. try `!sedse ai what is the meaning of life?`")
 
-    # Get the API key from environment variables
-    api_key = os.getenv("GEMINI_API_KEY")
+    # Get the Groq API key from environment variables
+    api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
-        return await ctx.send("the owner hasn't set up the `GEMINI_API_KEY` environment variable yet.")
+        return await ctx.send("the owner hasn't set up the `GROQ_API_KEY` environment variable yet.")
 
     # Let the user know the bot is thinking
     msg = await ctx.reply("thinking...")
 
-    # Gemini API endpoint (Using Gemini 1.5 Flash for fast, multi-purpose generation)
-    # Gemini API endpoint (Using Gemini 2.0 Flash for fast, multi-purpose generation)
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-    headers = {"Content-Type": "application/json"}
+    # Groq API endpoint
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}]
+        "model": "llama-3.3-70b-versatile", # Meta's massive, incredibly fast model
+        "messages": [{"role": "user", "content": prompt}]
     }
 
     try:
@@ -799,9 +802,9 @@ async def ai(ctx, *, prompt: str = None):
                 if response.status == 200:
                     data = await response.json()
                     
-                    # Safely parse the response
+                    # Safely parse Groq's response format
                     try:
-                        answer = data["candidates"][0]["content"]["parts"][0]["text"]
+                        answer = data["choices"][0]["message"]["content"]
                     except (KeyError, IndexError):
                         return await msg.edit(content="i got a weird response from the ai.")
 
@@ -815,7 +818,7 @@ async def ai(ctx, *, prompt: str = None):
                         await msg.edit(content=answer)
                 else:
                     error_text = await response.text()
-                    print(f"Gemini API Error: {error_text}")
+                    print(f"Groq API Error: {error_text}")
                     await msg.edit(content="my brain is currently malfunctioning (API error).")
                     
     except Exception as e:
