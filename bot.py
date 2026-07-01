@@ -786,7 +786,8 @@ async def ai(ctx, *, prompt: str = None):
     msg = await ctx.reply("thinking...")
 
     # Gemini API endpoint (Using Gemini 1.5 Flash for fast, multi-purpose generation)
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    # Gemini API endpoint (Using Gemini 2.0 Flash for fast, multi-purpose generation)
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{"parts": [{"text": prompt}]}]
