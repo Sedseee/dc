@@ -2085,6 +2085,101 @@ async def texttospeech(ctx, *, message: str):
     except Exception as e:
         await status_msg.edit(content=f"Error generating TTS: {e}")
 
+import urllib.parse
+
+@bot.command()
+async def research(ctx, *, query: str = None):
+    if not query:
+        return await ctx.send("you need to provide a topic or a link to research. try `!sedse research quantum computing`")
+        
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        return await ctx.send("the owner hasn't set up the GROQ_API_KEY environment variable yet.")
+
+    global browser_instance
+    if not browser_instance:
+        return await ctx.send("the browser engine isn't ready.")
+
+    msg = await ctx.reply("initiating web research...")
+
+    try:
+        # Determine if it's a direct URL or a search query
+        if query.startswith("http://") or query.startswith("https://"):
+            url = query
+        else:
+            # Route searches through DuckDuckGo Lite (it loads instantly and is text-only, perfect for scraping)
+            safe_query = urllib.parse.quote(query)
+            url = f"https://lite.duckduckgo.com/lite/?q={safe_query}"
+
+        # 1. Fetch web data using Playwright
+        await msg.edit(content="browsing the web and extracting data...")
+        
+        context = await browser_instance.new_context(
+            viewport={'width': 1280, 'height': 720}, 
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        )
+        page = await context.new_page()
+        
+        try:
+            await page.goto(url, timeout=15000, wait_until="domcontentloaded")
+            # Extract raw text from the page body
+            text = await page.evaluate("document.body.innerText")
+        finally:
+            # Always close the page and context to prevent memory leaks
+            await page.close()
+            await context.close()
+
+        if not text or len(text.strip()) < 50:
+            return await msg.edit(content="i couldn't find enough text data on that page to analyze.")
+
+        # 2. Process with Groq API
+        await msg.edit(content="analyzing data with ai...")
+        
+        # Limit text to ~8000 characters so we don't blow up the AI context window limit
+        truncated_text = text[:8000]
+        
+        system_prompt = "You are a helpful research assistant. Answer the user's query based ONLY on the provided web data. If the data doesn't contain the answer, say so. Keep your response concise, informative, and do not use any emojis."
+        user_content = f"User Query: {query}\n\nWeb Data:\n{truncated_text}"
+
+        groq_url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "llama-3.3-70b-versatile",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content}
+            ]
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(groq_url, headers=headers, json=payload) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    try:
+                        answer = data["choices"][0]["message"]["content"]
+                    except (KeyError, IndexError):
+                        return await msg.edit(content="received an invalid response format from the ai.")
+
+                    # Chunking logic for Discord's 2000 character limit
+                    if len(answer) > 2000:
+                        await msg.delete()
+                        for i in range(0, len(answer), 2000):
+                            await ctx.reply(answer[i:i+2000])
+                    else:
+                        await msg.edit(content=answer)
+                else:
+                    error_text = await response.text()
+                    print(f"Groq API Error in research: {error_text}")
+                    await msg.edit(content="failed to analyze the data due to an api error.")
+
+    except Exception as e:
+        print(f"Research command error: {e}")
+        await msg.edit(content=f"an error occurred while researching: {e}")
+
 # ==========================================
 # 7. RUN
 # ==========================================
