@@ -9,11 +9,20 @@ import asyncio
 import aiohttp
 import wavelink
 import io
+
 from gtts import gTTS
 from datetime import timedelta
 from typing import Union
 from discord.ext import commands
 from discord import app_commands
+# --- ADD THIS TO YOUR IMPORTS AT THE TOP ---
+from playwright.async_api import async_playwright
+
+# --- ADD THIS RIGHT BELOW YOUR IMPORTS ---
+# Playwright Global Variables
+playwright_instance = None
+browser_instance = None
+active_browsers = {} # Stores the active webpage for each Discord channel
 
 # ==========================================
 # 0. DATABASE & CACHE SETUP
@@ -540,6 +549,19 @@ class MyBot(commands.Bot):
         except Exception as e:
             print(f"sync failed: {e}")
 
+        # --- PLAYWRIGHT BROWSER SETUP ---
+        global playwright_instance, browser_instance
+        try:
+            playwright_instance = await async_playwright().start()
+            # The args below are crucial for Railway/Docker environments
+            browser_instance = await playwright_instance.chromium.launch(
+                headless=True,
+                args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--disable-dev-shm-usage']
+            )
+            print("Playwright Browser launched successfully on Railway!")
+        except Exception as e:
+            print(f"Failed to launch Playwright: {e}")
+
         # --- WAVELINK NODE SETUP (LAVALINK) ---
         nodes = [
             wavelink.Node(
@@ -766,6 +788,134 @@ async def on_message(message):
 @bot.event
 async def on_ready():
     print(f"bot logged in as {bot.user}")
+
+# ==========================================
+# PLAYWRIGHT BROWSER UI & HELPERS
+# ==========================================
+
+async def get_browser_screenshot(page):
+    # 1. Inject JavaScript to highlight all clickable elements with numbers
+    js_code = """
+    () => {
+        document.querySelectorAll('.sedse-tag').forEach(e => e.remove());
+        let count = 1;
+        document.querySelectorAll('a, button, input, textarea, [role="button"]').forEach(el => {
+            let rect = el.getBoundingClientRect();
+            // Only tag elements that are currently visible on the screen
+            if(rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= window.innerHeight) {
+                el.setAttribute('data-sedse-id', count);
+                let tag = document.createElement('div');
+                tag.className = 'sedse-tag';
+                tag.innerText = count;
+                tag.style.position = 'fixed';
+                tag.style.left = rect.left + 'px';
+                tag.style.top = rect.top + 'px';
+                tag.style.background = 'red';
+                tag.style.color = 'white';
+                tag.style.fontWeight = 'bold';
+                tag.style.padding = '1px 4px';
+                tag.style.fontSize = '12px';
+                tag.style.zIndex = '999999';
+                tag.style.pointerEvents = 'none'; // Prevents blocking the actual click
+                document.body.appendChild(tag);
+                count++;
+            }
+        });
+    }
+    """
+    await page.evaluate(js_code)
+    
+    # 2. Take the screenshot
+    screenshot_bytes = await page.screenshot(type="jpeg", quality=75)
+    return discord.File(io.BytesIO(screenshot_bytes), filename="browser.jpg")
+
+class ClickModal(discord.ui.Modal, title='Click an Element'):
+    element_id = discord.ui.TextInput(label='Enter the red number to click', placeholder='e.g., 5', max_length=4)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        page = active_browsers.get(interaction.channel.id)
+        if not page:
+            return await interaction.followup.send("Browser session expired.", ephemeral=True)
+        
+        try:
+            target_id = self.element_id.value.strip()
+            # The JS removes target="_blank" so links don't open in a new hidden tab
+            click_js = f"""
+            (() => {{
+                let el = document.querySelector('[data-sedse-id="{target_id}"]');
+                if(el) {{
+                    el.removeAttribute('target'); 
+                    el.click();
+                }}
+            }})()
+            """
+            await page.evaluate(click_js)
+            await asyncio.sleep(2.5) # Wait for page load
+            new_file = await get_browser_screenshot(page)
+            await interaction.message.edit(attachments=[new_file])
+        except Exception as e:
+            await interaction.followup.send(f"Failed to click: {e}", ephemeral=True)
+
+class TypeModal(discord.ui.Modal, title='Type in a Textbox'):
+    element_id = discord.ui.TextInput(label='Red number of the textbox', style=discord.TextStyle.short, max_length=4)
+    text_to_type = discord.ui.TextInput(label='What do you want to type?', style=discord.TextStyle.paragraph)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        page = active_browsers.get(interaction.channel.id)
+        if not page: return
+        
+        try:
+            target_id = self.element_id.value.strip()
+            focus_js = f"document.querySelector('[data-sedse-id=\"{target_id}\"]').focus()"
+            await page.evaluate(focus_js)
+            await page.keyboard.type(self.text_to_type.value)
+            await asyncio.sleep(0.5)
+            
+            new_file = await get_browser_screenshot(page)
+            await interaction.message.edit(attachments=[new_file])
+        except Exception as e:
+            await interaction.followup.send(f"Failed to type: {e}", ephemeral=True)
+
+class BrowserView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=600) # 10 minute timeout
+
+    @discord.ui.button(label="Click", style=discord.ButtonStyle.primary, emoji="🖱️")
+    async def click_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ClickModal())
+
+    @discord.ui.button(label="Type", style=discord.ButtonStyle.success, emoji="⌨️")
+    async def type_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TypeModal())
+
+    @discord.ui.button(label="Enter (Submit)", style=discord.ButtonStyle.secondary, emoji="↩️")
+    async def enter_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        page = active_browsers.get(interaction.channel.id)
+        if page:
+            await page.keyboard.press("Enter")
+            await asyncio.sleep(2)
+            new_file = await get_browser_screenshot(page)
+            await interaction.message.edit(attachments=[new_file])
+
+    @discord.ui.button(label="Scroll Down", style=discord.ButtonStyle.secondary, emoji="⬇️")
+    async def scroll_down(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        page = active_browsers.get(interaction.channel.id)
+        if page:
+            await page.mouse.wheel(0, 600)
+            await asyncio.sleep(0.5)
+            new_file = await get_browser_screenshot(page)
+            await interaction.message.edit(attachments=[new_file])
+
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.danger, emoji="✖️")
+    async def close_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        page = active_browsers.pop(interaction.channel.id, None)
+        if page:
+            await page.close()
+        await interaction.response.edit_message(content="Browser session closed.", attachments=[], view=None)
 
 # ==========================================
 # 5. COMMANDS
