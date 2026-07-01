@@ -772,6 +772,57 @@ async def on_ready():
 # ==========================================
 
 @bot.command()
+async def ai(ctx, *, prompt: str = None):
+    # Check if a prompt was provided
+    if not prompt:
+        return await ctx.send("you gotta give me a prompt. try `!sedse ai what is the meaning of life?`")
+
+    # Get the API key from environment variables
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return await ctx.send("the owner hasn't set up the `GEMINI_API_KEY` environment variable yet.")
+
+    # Let the user know the bot is thinking
+    msg = await ctx.reply("thinking...")
+
+    # Gemini API endpoint (Using Gemini 1.5 Flash for fast, multi-purpose generation)
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}]
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    # Safely parse the response
+                    try:
+                        answer = data["candidates"][0]["content"]["parts"][0]["text"]
+                    except (KeyError, IndexError):
+                        return await msg.edit(content="i got a weird response from the ai.")
+
+                    # Discord has a 2000 character limit per message.
+                    # If the AI's response is longer, we chunk it into multiple messages.
+                    if len(answer) > 2000:
+                        await msg.delete() # Remove the "thinking..." message
+                        for i in range(0, len(answer), 2000):
+                            await ctx.reply(answer[i:i+2000])
+                    else:
+                        await msg.edit(content=answer)
+                else:
+                    error_text = await response.text()
+                    print(f"Gemini API Error: {error_text}")
+                    await msg.edit(content="my brain is currently malfunctioning (API error).")
+                    
+    except Exception as e:
+        print(f"AI command error: {e}")
+        await msg.edit(content=f"an error occurred: {e}")
+
+
+@bot.command()
 @check_perms("modview", moderate_members=True)
 async def modview(ctx):
     embed = discord.Embed(
