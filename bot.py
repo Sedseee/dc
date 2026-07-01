@@ -1950,6 +1950,45 @@ async def texttospeech(ctx, *, message: str):
     except Exception as e:
         await status_msg.edit(content=f"❌ Error generating TTS: {e}")
 
+@bot.command()
+async def browse(ctx, *, url: str):
+    global browser_instance
+    if not browser_instance:
+        return await ctx.send("The browser engine isn't ready or failed to start.")
+
+    if not url.startswith("http"):
+        url = "https://" + url
+
+    msg = await ctx.send("🌐 Spinning up virtual browser...")
+
+    try:
+        # Create a new browser tab with standard HD resolution
+        context = await browser_instance.new_context(
+            viewport={'width': 1280, 'height': 720}, 
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        )
+        page = await context.new_page()
+        
+        # Save it to our active sessions
+        active_browsers[ctx.channel.id] = page
+
+        # Go to the URL (timeout after 20 seconds)
+        await page.goto(url, timeout=20000, wait_until="domcontentloaded")
+        await asyncio.sleep(2.5) # Give images time to load
+
+        # Take the screenshot with our red tags
+        screenshot_file = await get_browser_screenshot(page)
+        
+        await msg.delete()
+        await ctx.send(
+            content=f"**Browsing:** `{url}`\n*Click the buttons below to interact. When clicking/typing, use the red numbers on the screen.*", 
+            file=screenshot_file, 
+            view=BrowserView()
+        )
+
+    except Exception as e:
+        await msg.edit(content=f"❌ Failed to load website: {e}")
+
             
 # ==========================================
 # 7. RUN
