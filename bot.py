@@ -879,6 +879,7 @@ class TypeModal(discord.ui.Modal, title='Type in a Textbox'):
             await interaction.followup.send(f"Failed to type: {e}", ephemeral=True)
 
 class BrowserView(discord.ui.View):
+
 # ==========================================
 # PLAYWRIGHT BROWSER UI & HELPERS
 # ==========================================
@@ -1025,7 +1026,6 @@ class XYClickModal(discord.ui.Modal, title='Click by Coordinates'):
             await interaction.followup.send(f"Failed to click coordinates: {e}", ephemeral=True)
 
 
-# --- NEW: Drag Modal ---
 class DragModal(discord.ui.Modal, title='Drag & Drop'):
     start_coord = discord.ui.TextInput(label='Start Position (X,Y)', placeholder='e.g., 200,350', max_length=11)
     end_coord = discord.ui.TextInput(label='End Position (X,Y)', placeholder='e.g., 800,350', max_length=11)
@@ -1038,20 +1038,17 @@ class DragModal(discord.ui.Modal, title='Drag & Drop'):
         
         try:
             page = session["page"]
-            
-            # Split the user input by comma to extract X and Y
             sx, sy = map(float, self.start_coord.value.strip().split(','))
             ex, ey = map(float, self.end_coord.value.strip().split(','))
             
-            # Simulate a physical mouse drag
-            await page.mouse.move(sx, sy)        # Move to start
-            await page.mouse.down()              # Click and hold
-            await asyncio.sleep(0.2)             # Slight pause (humanizes it)
-            await page.mouse.move(ex, ey, steps=10) # Drag smoothly to end
-            await asyncio.sleep(0.2)             # Slight pause
-            await page.mouse.up()                # Release click
+            await page.mouse.move(sx, sy)        
+            await page.mouse.down()              
+            await asyncio.sleep(0.2)             
+            await page.mouse.move(ex, ey, steps=10) 
+            await asyncio.sleep(0.2)             
+            await page.mouse.up()                
             
-            await asyncio.sleep(2.5) # Wait for page to react
+            await asyncio.sleep(2.5) 
             new_file = await get_browser_screenshot(session)
             await interaction.message.edit(attachments=[new_file])
         except ValueError:
@@ -1150,6 +1147,7 @@ class BrowserView(discord.ui.View):
         if session:
             await session["page"].close()
         await interaction.response.edit_message(content="Browser session closed.", attachments=[], view=None)
+
 # ==========================================
 # 5. COMMANDS
 # ==========================================
